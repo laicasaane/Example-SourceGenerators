@@ -70,6 +70,7 @@ namespace {def.Namespace}
                 AppendConstructorsReadOnly(def, unionBuilder);
                 AppendMethod_GetHashCodeReadOnly(def, unionBuilder);
                 AppendMethod_EqualsReadOnly(def, unionBuilder);
+                AppendMethod_ToStringReadOnly(def, unionBuilder);
                 AppendOperator_ImplicitReadOnly(def, unionBuilder);
             }
             else
@@ -78,6 +79,7 @@ namespace {def.Namespace}
                 AppendMethod_Set(def, unionBuilder);
                 AppendMethod_GetHashCode(def, unionBuilder);
                 AppendMethod_Equals(def, unionBuilder);
+                AppendMethod_ToString(def, unionBuilder);
                 AppendOperator_Implicit(def, unionBuilder);
             }
 
@@ -99,6 +101,86 @@ namespace {def.Namespace}
             this.m_{member.Name} = value;
         }}
 ");
+            }
+        }
+
+        private static void AppendMethod_ToString(StructDefinition def, StringBuilder builder)
+        {
+            builder.Append(@"
+        public override string ToString()
+        {");
+
+            if (def.Members.Count < 3)
+            {
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+            if (this.m_ValueType == Type.{member.Name})
+                return this.m_{member.Name}.ToString();");
+                }
+
+                builder.Append(@"
+
+            return string.Empty;
+        }");
+            }
+            else
+            {
+                builder.Append($@"
+            switch (this.m_ValueType)
+            {{");
+
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+                case Type.{member.Name}: return this.m_{member.Name}.ToString();");
+                }
+
+                builder.Append($@"
+            }}
+
+            return string.Empty;
+        }}");
+            }
+        }
+
+        private static void AppendMethod_ToStringReadOnly(StructDefinition def, StringBuilder builder)
+        {
+            builder.Append(@"
+        public override string ToString()
+        {");
+
+            if (def.Members.Count < 3)
+            {
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+            if (this.ValueType == Type.{member.Name})
+                return this.{member.Name}.ToString();");
+                }
+
+                builder.Append(@"
+
+            return string.Empty;
+        }");
+            }
+            else
+            {
+                builder.Append($@"
+            switch (this.ValueType)
+            {{");
+
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+                case Type.{member.Name}: return this.{member.Name}.ToString();");
+                }
+
+                builder.Append($@"
+            }}
+
+            return string.Empty;
+        }}");
             }
         }
 
@@ -227,7 +309,8 @@ namespace {def.Namespace}
             => Equals(in left, in right);
 
         public static bool operator !=(in {def.Name} left, in {def.Name} right)
-            => !Equals(in left, in right);");
+            => !Equals(in left, in right);
+");
         }
 
         private static void AppendMethod_EqualsReadOnly(StructDefinition def, StringBuilder builder)
@@ -297,7 +380,8 @@ namespace {def.Namespace}
             => Equals(in left, in right);
 
         public static bool operator !=(in {def.Name} left, in {def.Name} right)
-            => !Equals(in left, in right);");
+            => !Equals(in left, in right);
+");
         }
 
         private static void AppendOperator_Implicit(StructDefinition def, StringBuilder builder)
