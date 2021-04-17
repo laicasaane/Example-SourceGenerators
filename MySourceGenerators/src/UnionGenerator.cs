@@ -70,19 +70,63 @@ namespace {receiver.Namespace}
                 }
             }
 
+            var underlyingType = string.Empty;
+            var memberCount = (ulong)receiver.Members.Count;
+
+            if (memberCount <= 255)
+                underlyingType = "byte";
+            else if (memberCount <= 32767)
+                underlyingType = "short";
+            else if (memberCount <= 65535)
+                underlyingType = "ushort";
+            else if (memberCount <= 2147483647)
+                underlyingType = "int";
+            else if (memberCount <= 42949672955)
+                underlyingType = "uint";
+            else if (memberCount <= 9223372036854775807)
+                underlyingType = "long";
+            else
+                underlyingType = "ulong";
+
             unionBuilder.Append($@"
+    [StructLayout(LayoutKind.Explicit, Pack = 1)]
     public partial struct {structName}
-    {{");
+    {{
+        public enum Type : {underlyingType}
+        {{");
+
+            foreach(var member in receiver.Members)
+            {
+                unionBuilder.Append($@"
+            {member.Name},");
+
+            }
+
+            unionBuilder.Append(@"
+        }
+");
+
+            unionBuilder.Append(@"
+        [FieldOffset(0)]
+        public");
+
+            if (receiver.IsReadOnly)
+                unionBuilder.Append(" readonly");
+
+            unionBuilder.Append(@" Type ValueType;
+");
 
             foreach (var member in receiver.Members)
             {
                 unionBuilder.Append(@"
+        [FieldOffset(1)]
         public ");
 
                 if (receiver.IsReadOnly)
                     unionBuilder.Append("readonly ");
 
                 unionBuilder.Append($"{member.Type} {member.Name};");
+                unionBuilder.AppendLine();
             }
 
             unionBuilder.Append(@"
