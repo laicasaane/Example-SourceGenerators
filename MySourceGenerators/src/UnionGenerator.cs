@@ -365,7 +365,6 @@ namespace {def.Namespace}
         public {def.Name}({member.Type} value)
         {{
             this.m_ValueType = Type.{member.Name};
-            this.m_{member.Name} = value;
 ");
 
                 for (var k = 0; k < def.Members.Count; k++)
@@ -379,8 +378,10 @@ namespace {def.Namespace}
             this.m_{memberOther.Name} = default;");
                 }
 
-                builder.Append(@"
-        }");
+                builder.Append($@"
+
+            this.m_{member.Name} = value;
+        }}");
 
                 if (i == last)
                     builder.AppendLine();
@@ -402,7 +403,6 @@ namespace {def.Namespace}
         public {def.Name}({member.Type} value)
         {{
             this.ValueType = Type.{member.Name};
-            this.{member.Name} = value;
 ");
 
                 for (var k = 0; k < def.Members.Count; k++)
@@ -416,8 +416,10 @@ namespace {def.Namespace}
             this.{memberOther.Name} = default;");
                 }
 
-                builder.Append(@"
-        }");
+                builder.Append($@"
+
+            this.{member.Name} = value;
+        }}");
 
                 if (i == last)
                     builder.AppendLine();
