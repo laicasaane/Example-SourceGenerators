@@ -19,7 +19,7 @@ namespace Unions
 {
     public enum InvalidValueAccess
     {
-        Unsafe, Default, Exception
+        Allow, ReturnDefault, ThrowException
     }
 
     [AttributeUsage(AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
@@ -85,7 +85,7 @@ namespace {def.Namespace}
             AppendProp_ValueType(def, unionBuilder);
             AppendProps(def, unionBuilder);
 
-            if (def.IsReadOnly && def.InvalidValueAccess == InvalidValueAccess.Unsafe)
+            if (def.IsReadOnly && def.InvalidValueAccess == InvalidValueAccess.Allow)
             {
                 AppendConstructorsReadOnlyUnsafe(def, unionBuilder);
                 AppendMethod_GetUnderlyingTypeReadOnlyUnsafe(def, unionBuilder);
@@ -530,7 +530,7 @@ namespace {def.Namespace}
 
             switch (def.InvalidValueAccess)
             {
-                case InvalidValueAccess.Exception:
+                case InvalidValueAccess.ThrowException:
                     {
                         for (var i = 0; i < def.Members.Count; i++)
                         {
@@ -559,7 +559,7 @@ namespace {def.Namespace}
                         break;
                     }
 
-                case InvalidValueAccess.Default:
+                case InvalidValueAccess.ReturnDefault:
                     {
                         for (var i = 0; i < def.Members.Count; i++)
                         {
@@ -717,7 +717,7 @@ namespace {def.Namespace}
 
         private static void AppendProps(StructDefinition def, StringBuilder builder)
         {
-            if (def.IsReadOnly && def.InvalidValueAccess == InvalidValueAccess.Unsafe)
+            if (def.IsReadOnly && def.InvalidValueAccess == InvalidValueAccess.Allow)
             {
                 foreach (var member in def.Members)
                 {
@@ -742,7 +742,7 @@ namespace {def.Namespace}
 
             switch (def.InvalidValueAccess)
             {
-                case InvalidValueAccess.Exception:
+                case InvalidValueAccess.ThrowException:
                     {
                         foreach (var member in def.Members)
                         {
@@ -762,7 +762,7 @@ namespace {def.Namespace}
                         break;
                     }
 
-                case InvalidValueAccess.Default:
+                case InvalidValueAccess.ReturnDefault:
                     {
                         foreach (var member in def.Members)
                         {
@@ -838,7 +838,7 @@ namespace {def.Namespace}
 
         private static void AppendProp_ValueType(StructDefinition def, StringBuilder builder)
         {
-            if (def.IsReadOnly && def.InvalidValueAccess == InvalidValueAccess.Unsafe)
+            if (def.IsReadOnly && def.InvalidValueAccess == InvalidValueAccess.Allow)
             {
                 builder.Append(@"
         [FieldOffset(0)]
@@ -905,7 +905,7 @@ namespace {def.Namespace}
 
         public enum InvalidValueAccess
         {
-            Unsafe, Default, Exception
+            Allow, ReturnDefault, ThrowException
         }
 
         public class StructDefinition
@@ -977,7 +977,7 @@ namespace {def.Namespace}
 
                 def = new StructDefinition();
                 def.Name = dec.Identifier.ToString();
-                def.InvalidValueAccess = InvalidValueAccess.Unsafe;
+                def.InvalidValueAccess = InvalidValueAccess.Allow;
                 def.GetGlobalNamespaces(dec);
                 def.GetLocalNamespaces(dec);
 
