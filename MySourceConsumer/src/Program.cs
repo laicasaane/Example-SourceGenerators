@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Numerics;
-using MyLibrary;
+using Unions;
 
 namespace MySourceConsumer
 {
@@ -9,6 +9,13 @@ namespace MySourceConsumer
     {
         static void Main(string[] args)
         {
+            int s = 6;
+            IntFloat x = s;
+            float f = x;
+
+            Console.WriteLine(x);
+            Console.WriteLine(f);
+
             unsafe
             {
                 Write<ByteNumber>();
@@ -27,7 +34,7 @@ namespace MySourceConsumer
         }
     }
 
-    [Union(typeof((int Int, float Float)))]
+    [Union(typeof((int Int, float Float)), InvalidValueAccess.Default)]
     public partial struct IntFloat { }
 
     [Union(typeof((sbyte, byte)))]

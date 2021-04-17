@@ -15,22 +15,42 @@ namespace MySourceGenerators
         private const string _attributeText = @"
 using System;
 
-namespace MyLibrary
+namespace Unions
 {
+    public enum InvalidValueAccess
+    {
+        Unsafe, Default, Exception
+    }
+
     [AttributeUsage(AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
     public sealed class UnionAttribute : Attribute
     {
-        public readonly Type TupleType;
+        public Type TupleType { get; }
+
+        public InvalidValueAccess InvalidValueAccess { get; }
 
         public UnionAttribute(Type tupleType)
         {
             this.TupleType = tupleType;
         }
+
+        public UnionAttribute(Type tupleType, InvalidValueAccess invalidValueAccess)
+        {
+            this.TupleType = tupleType;
+            this.InvalidValueAccess = invalidValueAccess;
+        }
+    }
+
+    public class InvalidUnionValueException : InvalidCastException
+    {
+        public InvalidUnionValueException() : base() { }
+
+        public InvalidUnionValueException(string message) : base(message) { }
+
+        public InvalidUnionValueException(string message, Exception innerException) : base(message, innerException) { }
     }
 }
 ";
-
-        private const int IndentSize = 4;
 
         public void Initialize(GeneratorInitializationContext context)
         {
@@ -65,18 +85,20 @@ namespace {def.Namespace}
             AppendProp_ValueType(def, unionBuilder);
             AppendProps(def, unionBuilder);
 
-            if (def.IsReadOnly)
+            if (def.IsReadOnly && def.InvalidValueAccess == InvalidValueAccess.Unsafe)
             {
-                AppendConstructorsReadOnly(def, unionBuilder);
-                AppendMethod_GetHashCodeReadOnly(def, unionBuilder);
-                AppendMethod_EqualsReadOnly(def, unionBuilder);
-                AppendMethod_ToStringReadOnly(def, unionBuilder);
-                AppendOperator_ImplicitReadOnly(def, unionBuilder);
+                AppendConstructorsReadOnlyUnsafe(def, unionBuilder);
+                AppendMethod_GetUnderlyingTypeReadOnlyUnsafe(def, unionBuilder);
+                AppendMethod_GetHashCodeReadOnlyUnsafe(def, unionBuilder);
+                AppendMethod_EqualsReadOnlyUnsafe(def, unionBuilder);
+                AppendMethod_ToStringReadOnlyUnsafe(def, unionBuilder);
+                AppendOperator_ImplicitReadOnlyUnsafe(def, unionBuilder);
             }
             else
             {
                 AppendConstructors(def, unionBuilder);
                 AppendMethod_Set(def, unionBuilder);
+                AppendMethod_GetUnderlyingType(def, unionBuilder);
                 AppendMethod_GetHashCode(def, unionBuilder);
                 AppendMethod_Equals(def, unionBuilder);
                 AppendMethod_ToString(def, unionBuilder);
@@ -88,6 +110,96 @@ namespace {def.Namespace}
 }");
             usingBuilder.AppendLine(unionBuilder.ToString());
             context.AddSource($"Union_{def.Name}.cs", SourceText.From(usingBuilder.ToString(), Encoding.UTF8));
+        }
+
+        private static void AppendMethod_GetUnderlyingType(StructDefinition def, StringBuilder builder)
+        {
+            builder.Append($@"
+        public System.Type GetUnderlyingType()");
+
+            if (def.Members.Count < 3)
+            {
+                builder.Append(@"
+        {");
+
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+            if (this.m_ValueType == Type.{member.Name})
+                return this.m_{member.Name}.GetType();
+");
+                }
+
+                builder.Append($@"
+            return this.GetType();
+        }}
+");
+            }
+            else
+            {
+                builder.Append($@"
+        {{
+            switch (this.m_ValueType)
+            {{");
+
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+                case Type.{member.Name}: return this.m_{member.Name}.GetType();");
+                }
+
+                builder.Append($@"
+            }}
+
+            return this.GetType();
+        }}
+");
+            }
+        }
+
+        private static void AppendMethod_GetUnderlyingTypeReadOnlyUnsafe(StructDefinition def, StringBuilder builder)
+        {
+            builder.Append($@"
+        public System.Type GetUnderlyingType()");
+
+            if (def.Members.Count < 3)
+            {
+                builder.Append(@"
+        {");
+
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+            if (this.ValueType == Type.{member.Name})
+                return this.{member.Name}.GetType();
+");
+                }
+
+                builder.Append(@"
+            return this.GetType();
+        }
+");
+            }
+            else
+            {
+                builder.Append($@"
+        {{
+            switch (this.ValueType)
+            {{");
+
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+                case Type.{member.Name}: return this.{member.Name}.GetType();");
+                }
+
+                builder.Append(@"
+            }
+
+            return this.GetType();
+        }
+");
+            }
         }
 
         private static void AppendMethod_Set(StructDefinition def, StringBuilder builder)
@@ -116,11 +228,11 @@ namespace {def.Namespace}
                 {
                     builder.Append($@"
             if (this.m_ValueType == Type.{member.Name})
-                return this.m_{member.Name}.ToString();");
+                return this.m_{member.Name}.ToString();
+");
                 }
 
                 builder.Append(@"
-
             return string.Empty;
         }");
             }
@@ -136,15 +248,15 @@ namespace {def.Namespace}
                 case Type.{member.Name}: return this.m_{member.Name}.ToString();");
                 }
 
-                builder.Append($@"
-            }}
+                builder.Append(@"
+            }
 
             return string.Empty;
-        }}");
+        }");
             }
         }
 
-        private static void AppendMethod_ToStringReadOnly(StructDefinition def, StringBuilder builder)
+        private static void AppendMethod_ToStringReadOnlyUnsafe(StructDefinition def, StringBuilder builder)
         {
             builder.Append(@"
         public override string ToString()
@@ -156,11 +268,11 @@ namespace {def.Namespace}
                 {
                     builder.Append($@"
             if (this.ValueType == Type.{member.Name})
-                return this.{member.Name}.ToString();");
+                return this.{member.Name}.ToString();
+");
                 }
 
                 builder.Append(@"
-
             return string.Empty;
         }");
             }
@@ -176,11 +288,11 @@ namespace {def.Namespace}
                 case Type.{member.Name}: return this.{member.Name}.ToString();");
                 }
 
-                builder.Append($@"
-            }}
+                builder.Append(@"
+            }
 
             return string.Empty;
-        }}");
+        }");
             }
         }
 
@@ -189,57 +301,87 @@ namespace {def.Namespace}
             builder.Append(@"
         public override int GetHashCode()
         {
-            return ");
+            var hash = EqualityComparer<Type>.Default.GetHashCode(this.m_ValueType) * -1521134295;
+");
 
-            var last = def.Members.Count - 1;
-
-            builder.Append('(', last);
-            builder.Append($@"EqualityComparer<Type>.Default.GetHashCode(this.m_ValueType) * -1521134295 +");
-
-            for (var i = 0; i < def.Members.Count; i++)
+            if (def.Members.Count < 3)
             {
-                var member = def.Members[i];
-
-                if (i < last)
+                foreach (var member in def.Members)
+                {
                     builder.Append($@"
-                    EqualityComparer<{member.Type}>.Default.GetHashCode(this.m_{member.Name})) * -1521134295 +");
-                else
-                    builder.Append($@"
-                    EqualityComparer<{member.Type}>.Default.GetHashCode(this.m_{member.Name});");
-            }
+            if (this.m_ValueType == Type.{member.Name})
+                return hash + EqualityComparer<{member.Type}>.Default.GetHashCode(this.m_{member.Name});
+");
+                }
 
-            builder.Append(@"
+                builder.Append(@"
+            return hash;
         }
 ");
+            }
+            else
+            {
+                builder.Append($@"
+            switch (this.m_ValueType)
+            {{");
+
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+                case Type.{member.Name}: return hash + EqualityComparer<{member.Type}>.Default.GetHashCode(this.m_{member.Name});");
+                }
+
+                builder.Append(@"
+            }
+
+            return hash;
+        }
+");
+            }
         }
 
-        private static void AppendMethod_GetHashCodeReadOnly(StructDefinition def, StringBuilder builder)
+        private static void AppendMethod_GetHashCodeReadOnlyUnsafe(StructDefinition def, StringBuilder builder)
         {
             builder.Append(@"
         public override int GetHashCode()
         {
-            return ");
+            var hash = EqualityComparer<Type>.Default.GetHashCode(this.ValueType) * -1521134295;
+");
 
-            var last = def.Members.Count - 1;
-
-            builder.Append('(', last);
-            builder.Append($@"EqualityComparer<Type>.Default.GetHashCode(this.ValueType) * -1521134295 +");
-
-            for (var i = 0; i < def.Members.Count; i++)
+            if (def.Members.Count < 3)
             {
-                var member = def.Members[i];
-
-                if (i < last)
+                foreach (var member in def.Members)
+                {
                     builder.Append($@"
-                    EqualityComparer<{member.Type}>.Default.GetHashCode(this.{member.Name})) * -1521134295 +");
-                else
-                    builder.Append($@"
-                    EqualityComparer<{member.Type}>.Default.GetHashCode(this.{member.Name});");
-            }
+            if (this.ValueType == Type.{member.Name})
+                return hash + EqualityComparer<{member.Type}>.Default.GetHashCode(this.{member.Name});
+");
+                }
 
-            builder.Append(@"
+                builder.Append(@"
+            return hash;
         }
 ");
+            }
+            else
+            {
+                builder.Append($@"
+            switch (this.ValueType)
+            {{");
+
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+                case Type.{member.Name}: return hash + EqualityComparer<{member.Type}>.Default.GetHashCode(this.{member.Name});");
+                }
+
+                builder.Append(@"
+            }
+
+            return hash;
+        }
+");
+            }
         }
 
         private static void AppendMethod_Equals(StructDefinition def, StringBuilder builder)
@@ -264,20 +406,19 @@ namespace {def.Namespace}
         {{
             if (a.m_ValueType != b.m_ValueType)
                 return false;
-
 ");
 
                 foreach (var member in def.Members)
                 {
                     builder.Append($@"
             if (a.m_ValueType == Type.{member.Name})
-                return EqualityComparer<{member.Type}>.Default.Equals(a.m_{member.Name}, b.m_{member.Name});");
+                return EqualityComparer<{member.Type}>.Default.Equals(a.m_{member.Name}, b.m_{member.Name});
+");
                 }
 
-                builder.Append($@"
-
+                builder.Append(@"
             return false;
-        }}
+        }
 ");
             }
             else
@@ -296,11 +437,11 @@ namespace {def.Namespace}
                 case Type.{member.Name}: return EqualityComparer<{member.Type}>.Default.Equals(a.m_{member.Name}, b.m_{member.Name});");
                 }
 
-                builder.Append($@"
-            }}
+                builder.Append(@"
+            }
 
             return false;
-        }}
+        }
 ");
             }
 
@@ -313,7 +454,7 @@ namespace {def.Namespace}
 ");
         }
 
-        private static void AppendMethod_EqualsReadOnly(StructDefinition def, StringBuilder builder)
+        private static void AppendMethod_EqualsReadOnlyUnsafe(StructDefinition def, StringBuilder builder)
         {
             builder.Append($@"
         public override bool Equals(object obj)
@@ -335,20 +476,19 @@ namespace {def.Namespace}
         {{
             if (a.ValueType != b.ValueType)
                 return false;
-
 ");
 
                 foreach (var member in def.Members)
                 {
                     builder.Append($@"
             if (a.ValueType == Type.{member.Name})
-                return EqualityComparer<{member.Type}>.Default.Equals(a.{member.Name}, b.{member.Name});");
+                return EqualityComparer<{member.Type}>.Default.Equals(a.{member.Name}, b.{member.Name});
+");
                 }
 
-                builder.Append($@"
-
+                builder.Append(@"
             return false;
-        }}
+        }
 ");
             }
             else
@@ -367,11 +507,11 @@ namespace {def.Namespace}
                 case Type.{member.Name}: return EqualityComparer<{member.Type}>.Default.Equals(a.{member.Name}, b.{member.Name});");
                 }
 
-                builder.Append($@"
-            }}
+                builder.Append(@"
+            }
 
             return false;
-        }}
+        }
 ");
             }
 
@@ -388,28 +528,93 @@ namespace {def.Namespace}
         {
             var last = def.Members.Count - 1;
 
-            for (var i = 0; i < def.Members.Count; i++)
+            switch (def.InvalidValueAccess)
             {
-                var member = def.Members[i];
+                case InvalidValueAccess.Exception:
+                    {
+                        for (var i = 0; i < def.Members.Count; i++)
+                        {
+                            var member = def.Members[i];
 
-                if (i <= 0)
-                    builder.AppendLine();
+                            if (i <= 0)
+                                builder.AppendLine();
 
-                builder.Append($@"
+                            builder.Append($@"
         public static implicit operator {def.Name}({member.Type} value)
             => new {def.Name}(value);
 ");
 
-                builder.Append($@"
+                            builder.Append($@"
+        public static implicit operator {member.Type}(in {def.Name} value)
+        {{
+            if (value.m_ValueType == Type.{member.Name})
+                return value.m_{member.Name};
+
+            throw new InvalidUnionValueException($""Cannot implicitly convert underlying type '{{value.GetUnderlyingType().Name}}' to '{member.Type}'"");
+        }}");
+
+                            if (i < last)
+                                builder.AppendLine();
+                        }
+                        break;
+                    }
+
+                case InvalidValueAccess.Default:
+                    {
+                        for (var i = 0; i < def.Members.Count; i++)
+                        {
+                            var member = def.Members[i];
+
+                            if (i <= 0)
+                                builder.AppendLine();
+
+                            builder.Append($@"
+        public static implicit operator {def.Name}({member.Type} value)
+            => new {def.Name}(value);
+");
+
+                            builder.Append($@"
+        public static implicit operator {member.Type}(in {def.Name} value)
+        {{
+            if (value.m_ValueType == Type.{member.Name})
+                return value.m_{member.Name};
+
+            return default;
+        }}");
+
+                            if (i < last)
+                                builder.AppendLine();
+                        }
+                        break;
+                    }
+
+                default:
+                    {
+                        for (var i = 0; i < def.Members.Count; i++)
+                        {
+                            var member = def.Members[i];
+
+                            if (i <= 0)
+                                builder.AppendLine();
+
+                            builder.Append($@"
+        public static implicit operator {def.Name}({member.Type} value)
+            => new {def.Name}(value);
+");
+
+                            builder.Append($@"
         public static implicit operator {member.Type}(in {def.Name} value)
             => value.m_{member.Name};");
 
-                if (i < last)
-                    builder.AppendLine();
+                            if (i < last)
+                                builder.AppendLine();
+                        }
+                        break;
+                    }
             }
         }
 
-        private static void AppendOperator_ImplicitReadOnly(StructDefinition def, StringBuilder builder)
+        private static void AppendOperator_ImplicitReadOnlyUnsafe(StructDefinition def, StringBuilder builder)
         {
             var last = def.Members.Count - 1;
 
@@ -472,7 +677,7 @@ namespace {def.Namespace}
             }
         }
 
-        private static void AppendConstructorsReadOnly(StructDefinition def, StringBuilder builder)
+        private static void AppendConstructorsReadOnlyUnsafe(StructDefinition def, StringBuilder builder)
         {
             var last = def.Members.Count - 1;
 
@@ -512,7 +717,7 @@ namespace {def.Namespace}
 
         private static void AppendProps(StructDefinition def, StringBuilder builder)
         {
-            if (def.IsReadOnly)
+            if (def.IsReadOnly && def.InvalidValueAccess == InvalidValueAccess.Unsafe)
             {
                 foreach (var member in def.Members)
                 {
@@ -521,23 +726,72 @@ namespace {def.Namespace}
         public readonly {member.Type} {member.Name};
 ");
                 }
-            }
-            else
-            {
-                foreach (var member in def.Members)
-                {
-                    builder.Append($@"
-        [FieldOffset(1)]
-        private {member.Type} m_{member.Name};
-");
-                }
 
-                foreach (var member in def.Members)
-                {
-                    builder.Append($@"
+                return;
+            }
+
+            var readonlyKeyword = def.IsReadOnly ? "readonly " : string.Empty;
+
+            foreach (var member in def.Members)
+            {
+                builder.Append($@"
+        [FieldOffset(1)]
+        private {readonlyKeyword}{member.Type} m_{member.Name};
+");
+            }
+
+            switch (def.InvalidValueAccess)
+            {
+                case InvalidValueAccess.Exception:
+                    {
+                        foreach (var member in def.Members)
+                        {
+                            builder.Append($@"
+        public {member.Type} {member.Name}
+        {{
+            get
+            {{
+                if (this.m_ValueType == Type.{member.Name})
+                    return this.m_{member.Name};
+
+                throw new InvalidUnionValueException($""Cannot convert underlying type '{{GetUnderlyingType().Name}}' to '{member.Type}'"");
+            }}
+        }}
+");
+                        }
+                        break;
+                    }
+
+                case InvalidValueAccess.Default:
+                    {
+                        foreach (var member in def.Members)
+                        {
+                            builder.Append($@"
+        public {member.Type} {member.Name}
+        {{
+            get
+            {{
+                if (this.m_ValueType == Type.{member.Name})
+                    return this.m_{member.Name};
+
+                return default;
+            }}
+        }}
+");
+                        }
+                        break;
+                    }
+
+                default:
+                    {
+                        foreach (var member in def.Members)
+                        {
+                            builder.Append($@"
         public {member.Type} {member.Name} => this.m_{member.Name};
 ");
-                }
+                        }
+                        break;
+                    }
             }
         }
 
@@ -584,7 +838,7 @@ namespace {def.Namespace}
 
         private static void AppendProp_ValueType(StructDefinition def, StringBuilder builder)
         {
-            if (def.IsReadOnly)
+            if (def.IsReadOnly && def.InvalidValueAccess == InvalidValueAccess.Unsafe)
             {
                 builder.Append(@"
         [FieldOffset(0)]
@@ -593,9 +847,11 @@ namespace {def.Namespace}
             }
             else
             {
-                builder.Append(@"
+                var readonlyKeyword = def.IsReadOnly ? "readonly " : string.Empty;
+
+                builder.Append($@"
         [FieldOffset(0)]
-        private Type m_ValueType;
+        private {readonlyKeyword}Type m_ValueType;
 
         public Type ValueType => this.m_ValueType;
 ");
@@ -647,6 +903,11 @@ namespace {def.Namespace}
             }
         }
 
+        public enum InvalidValueAccess
+        {
+            Unsafe, Default, Exception
+        }
+
         public class StructDefinition
         {
             public string Namespace { get; private set; }
@@ -656,6 +917,8 @@ namespace {def.Namespace}
             public StructDeclarationSyntax Struct { get; private set; }
 
             public bool IsReadOnly { get; private set; }
+
+            public InvalidValueAccess InvalidValueAccess { get; private set; }
 
             public HashSet<string> GlobalNamespaces = new HashSet<string>();
 
@@ -684,16 +947,28 @@ namespace {def.Namespace}
 
                 if (attribute == null ||
                     attribute.ArgumentList == null ||
-                    attribute.ArgumentList.Arguments.Count != 1)
+                    attribute.ArgumentList.Arguments.Count < 1)
                 {
                     def = default;
                     return false;
                 }
 
-                var expression = attribute.ArgumentList.Arguments[0].Expression;
+                TypeOfExpressionSyntax typeOf = null;
+                MemberAccessExpressionSyntax memberAccess = null;
 
-                if (!(expression is TypeOfExpressionSyntax typeOf) ||
-                    !(typeOf.Type is TupleTypeSyntax tuple) ||
+                foreach (var arg in attribute.ArgumentList.Arguments)
+                {
+                    if (arg.Expression is TypeOfExpressionSyntax typeOfSyntax)
+                    {
+                        typeOf = typeOfSyntax;
+                    }
+                    else if (arg.Expression is MemberAccessExpressionSyntax memberAccessSyntax)
+                    {
+                        memberAccess = memberAccessSyntax;
+                    }
+                }
+
+                if (typeOf == null || !(typeOf.Type is TupleTypeSyntax tuple) ||
                     tuple.Elements.Count <= 0)
                 {
                     def = default;
@@ -702,6 +977,7 @@ namespace {def.Namespace}
 
                 def = new StructDefinition();
                 def.Name = dec.Identifier.ToString();
+                def.InvalidValueAccess = InvalidValueAccess.Unsafe;
                 def.GetGlobalNamespaces(dec);
                 def.GetLocalNamespaces(dec);
 
@@ -717,10 +993,20 @@ namespace {def.Namespace}
                         def.IsReadOnly = true;
                 }
 
+                if (memberAccess != null &&
+                    string.Equals(memberAccess.Expression.ToString(), nameof(InvalidValueAccess)))
+                {
+                    if (Enum.TryParse<InvalidValueAccess>(memberAccess.Name.ToString(), true, out var value))
+                    {
+                        def.InvalidValueAccess = value;
+                    }
+                }
+
                 return true;
             }
 
-            private static void GetName(SemanticModel semanticModel, TupleElementSyntax element, out string typeName, out string name)
+            private static void GetName(SemanticModel semanticModel, TupleElementSyntax element,
+                                        out string typeName, out string name)
             {
                 typeName = element.Type.ToString();
                 name = element.Identifier.ToString();
