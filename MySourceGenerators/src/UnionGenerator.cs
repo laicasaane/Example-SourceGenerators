@@ -41,13 +41,13 @@ namespace Unions
         }
     }
 
-    public class InvalidUnionValueException : InvalidCastException
+    public class InvalidValueAccessException : InvalidCastException
     {
-        public InvalidUnionValueException() : base() { }
+        public InvalidValueAccessException() : base() { }
 
-        public InvalidUnionValueException(string message) : base(message) { }
+        public InvalidValueAccessException(string message) : base(message) { }
 
-        public InvalidUnionValueException(string message, Exception innerException) : base(message, innerException) { }
+        public InvalidValueAccessException(string message, Exception innerException) : base(message, innerException) { }
     }
 }
 ";
@@ -550,7 +550,7 @@ namespace {def.Namespace}
             if (value.m_ValueType == Type.{member.Name})
                 return value.m_{member.Name};
 
-            throw new InvalidUnionValueException($""Cannot implicitly convert underlying type '{{value.GetUnderlyingType().Name}}' to '{member.Type}'"");
+            throw new InvalidValueAccessException($""Cannot implicitly convert underlying type '{{value.GetUnderlyingType().Name}}' to '{member.Type}'"");
         }}");
 
                             if (i < last)
@@ -754,7 +754,7 @@ namespace {def.Namespace}
                 if (this.m_ValueType == Type.{member.Name})
                     return this.m_{member.Name};
 
-                throw new InvalidUnionValueException($""Cannot convert underlying type '{{GetUnderlyingType().Name}}' to '{member.Type}'"");
+                throw new InvalidValueAccessException($""Cannot convert underlying type '{{GetUnderlyingType().Name}}' to '{member.Type}'"");
             }}
         }}
 ");

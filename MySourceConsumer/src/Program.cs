@@ -34,7 +34,7 @@ namespace MySourceConsumer
         }
     }
 
-    [Union(typeof((int Int, float Float)), InvalidValueAccess.ReturnDefault)]
+    [Union(typeof((int Int, float Float)), InvalidValueAccess.ThrowException)]
     public partial struct IntFloat { }
 
     [Union(typeof((sbyte, byte)))]
