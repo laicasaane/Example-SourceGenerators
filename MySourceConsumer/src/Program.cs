@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using MyLibrary;
 
 namespace MySourceConsumer
@@ -10,79 +9,45 @@ namespace MySourceConsumer
     {
         static void Main(string[] args)
         {
-            var vIF = new IntFloat();
-            vIF.Float = 5f;
+            unsafe
+            {
+                Write<ByteNumber>();
+                Write<ShortNumber>();
+                Write<IntNumber>();
+                Write<LongNumber>();
+                Write<IntegerNumber>();
+                Write<RealNumber>();
+                Write<Number>();
+
+                void Write<T>() where T : unmanaged
+                {
+                    Console.WriteLine($"Size of {typeof(T).Name} = {sizeof(T)}");
+                }
+            }
         }
     }
 
     [Union(typeof((int Int, float Float)))]
     public partial struct IntFloat { }
-}
 
-namespace Examples
-{
-    [StructLayout(LayoutKind.Explicit, Pack = 1)]
-    public partial struct Union
-    {
-        public enum Type : byte
-        {
-            Int,
-            Float,
-            Long,
-        }
+    [Union(typeof((sbyte, byte)))]
+    public readonly partial struct ByteNumber { }
 
-        [FieldOffset(0)]
-        public readonly Type ValueType;
+    [Union(typeof((short, ushort)))]
+    public readonly partial struct ShortNumber { }
 
-        [FieldOffset(1)]
-        public readonly int Int;
+    [Union(typeof((int, uint)))]
+    public readonly partial struct IntNumber { }
 
-        [FieldOffset(1)]
-        public readonly float Float;
+    [Union(typeof((long, ulong)))]
+    public readonly partial struct LongNumber { }
 
-        [FieldOffset(1)]
-        public readonly long Long;
+    [Union(typeof((sbyte, byte, short, ushort, int, uint, long, ulong)))]
+    public readonly partial struct IntegerNumber { }
 
-        public Union(int value)
-        {
-            this.ValueType = Type.Int;
-            this.Float = default;
-            this.Long = default;
-            this.Int = value;
-        }
+    [Union(typeof((float, double)))]
+    public readonly partial struct RealNumber { }
 
-        public Union(float value)
-        {
-            this.ValueType = Type.Float;
-            this.Int = default;
-            this.Long = default;
-            this.Float = value;
-        }
-
-        public Union(long value)
-        {
-            this.ValueType = Type.Long;
-            this.Int = default;
-            this.Float = default;
-            this.Long = value;
-        }
-
-        public static implicit operator Union(int value)
-            => new(value);
-
-        public static implicit operator Union(float value)
-            => new(value);
-
-        public static implicit operator Union(long value)
-            => new(value);
-
-        public static implicit operator int(in Union value)
-            => value.Int;
-
-        public static implicit operator float(in Union value)
-            => value.Float;
-
-        public static implicit operator long(in Union value)
-            => value.Long;
-    }
+    [Union(typeof((sbyte, byte, short, ushort, int, uint, long, ulong, float, double)))]
+    public readonly partial struct Number { }
 }

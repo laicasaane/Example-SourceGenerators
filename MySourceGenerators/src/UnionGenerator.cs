@@ -43,35 +43,422 @@ namespace MyLibrary
 
         public void Execute(GeneratorExecutionContext context)
         {
-            // retrieve the populated receiver
             if (!(context.SyntaxContextReceiver is SyntaxReceiver receiver) ||
-                receiver.Struct == null || receiver.Members == null)
+                receiver.Structs.Count <= 0)
                 return;
 
-            var structName = receiver.Struct.Identifier.ToString();
-            var unionBuilder = new StringBuilder($@"
-
-namespace {receiver.Namespace}
-{{");
-            var usingBuilder = new StringBuilder();
-
-            foreach (var ns in receiver.GlobalNamespaces)
+            foreach (var def in receiver.Structs)
             {
-                usingBuilder.AppendLine($"using {ns};");
+                Execute(context, def);
+            }
+        }
+
+        public void Execute(GeneratorExecutionContext context, StructDefinition def)
+        {
+            var usingBuilder = new StringBuilder();
+            var unionBuilder = new StringBuilder($@"
+namespace {def.Namespace}
+{{");
+
+            AppendUsings(def, unionBuilder, usingBuilder);
+            AppendEnum_Type(def, unionBuilder);
+            AppendProp_ValueType(def, unionBuilder);
+            AppendProps(def, unionBuilder);
+
+            if (def.IsReadOnly)
+            {
+                AppendConstructorsReadOnly(def, unionBuilder);
+                AppendMethod_GetHashCodeReadOnly(def, unionBuilder);
+                AppendMethod_EqualsReadOnly(def, unionBuilder);
+                AppendOperator_ImplicitReadOnly(def, unionBuilder);
+            }
+            else
+            {
+                AppendConstructors(def, unionBuilder);
+                AppendMethod_Set(def, unionBuilder);
+                AppendMethod_GetHashCode(def, unionBuilder);
+                AppendMethod_Equals(def, unionBuilder);
+                AppendOperator_Implicit(def, unionBuilder);
             }
 
-            if (receiver.LocalNamespaces.Count > 0)
-            {
-                unionBuilder.AppendLine();
+            unionBuilder.Append(@"
+    }
+}");
+            usingBuilder.AppendLine(unionBuilder.ToString());
+            context.AddSource($"Union_{def.Name}.cs", SourceText.From(usingBuilder.ToString(), Encoding.UTF8));
+        }
 
-                foreach (var ns in receiver.LocalNamespaces)
+        private static void AppendMethod_Set(StructDefinition def, StringBuilder builder)
+        {
+            foreach (var member in def.Members)
+            {
+                builder.Append($@"
+        public void Set({member.Type} value)
+        {{
+            this.m_ValueType = Type.{member.Name};
+            this.m_{member.Name} = value;
+        }}
+");
+            }
+        }
+
+        private static void AppendMethod_GetHashCode(StructDefinition def, StringBuilder builder)
+        {
+            builder.Append(@"
+        public override int GetHashCode()
+        {
+            return ");
+
+            var last = def.Members.Count - 1;
+
+            builder.Append('(', last);
+            builder.Append($@"EqualityComparer<Type>.Default.GetHashCode(this.m_ValueType) * -1521134295 +");
+
+            for (var i = 0; i < def.Members.Count; i++)
+            {
+                var member = def.Members[i];
+
+                if (i < last)
+                    builder.Append($@"
+                    EqualityComparer<{member.Type}>.Default.GetHashCode(this.m_{member.Name})) * -1521134295 +");
+                else
+                    builder.Append($@"
+                    EqualityComparer<{member.Type}>.Default.GetHashCode(this.m_{member.Name});");
+            }
+
+            builder.Append(@"
+        }
+");
+        }
+
+        private static void AppendMethod_GetHashCodeReadOnly(StructDefinition def, StringBuilder builder)
+        {
+            builder.Append(@"
+        public override int GetHashCode()
+        {
+            return ");
+
+            var last = def.Members.Count - 1;
+
+            builder.Append('(', last);
+            builder.Append($@"EqualityComparer<Type>.Default.GetHashCode(this.ValueType) * -1521134295 +");
+
+            for (var i = 0; i < def.Members.Count; i++)
+            {
+                var member = def.Members[i];
+
+                if (i < last)
+                    builder.Append($@"
+                    EqualityComparer<{member.Type}>.Default.GetHashCode(this.{member.Name})) * -1521134295 +");
+                else
+                    builder.Append($@"
+                    EqualityComparer<{member.Type}>.Default.GetHashCode(this.{member.Name});");
+            }
+
+            builder.Append(@"
+        }
+");
+        }
+
+        private static void AppendMethod_Equals(StructDefinition def, StringBuilder builder)
+        {
+            builder.Append($@"
+        public override bool Equals(object obj)
+            => obj is {def.Name} other && Equals(in this, in other);
+
+        public bool Equals({def.Name} other)
+            => Equals(in this, in other);
+
+        public bool Equals(in {def.Name} other)
+            => Equals(in this, in other);
+");
+
+            builder.Append($@"
+        public static bool Equals(in {def.Name} a, in {def.Name} b)");
+
+            if (def.Members.Count < 3)
+            {
+                builder.Append($@"
+        {{
+            if (a.m_ValueType != b.m_ValueType)
+                return false;
+
+");
+
+                foreach (var member in def.Members)
                 {
-                    unionBuilder.AppendLine($"    using {ns};");
+                    builder.Append($@"
+            if (a.m_ValueType == Type.{member.Name})
+                return EqualityComparer<{member.Type}>.Default.Equals(a.m_{member.Name}, b.m_{member.Name});");
+                }
+
+                builder.Append($@"
+
+            return false;
+        }}
+");
+            }
+            else
+            {
+                builder.Append($@"
+        {{
+            if (a.m_ValueType != b.m_ValueType)
+                return false;
+
+            switch (a.m_ValueType)
+            {{");
+
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+                case Type.{member.Name}: return EqualityComparer<{member.Type}>.Default.Equals(a.m_{member.Name}, b.m_{member.Name});");
+                }
+
+                builder.Append($@"
+            }}
+
+            return false;
+        }}
+");
+            }
+
+            builder.Append($@"
+        public static bool operator ==(in {def.Name} left, in {def.Name} right)
+            => Equals(in left, in right);
+
+        public static bool operator !=(in {def.Name} left, in {def.Name} right)
+            => !Equals(in left, in right);");
+        }
+
+        private static void AppendMethod_EqualsReadOnly(StructDefinition def, StringBuilder builder)
+        {
+            builder.Append($@"
+        public override bool Equals(object obj)
+            => obj is {def.Name} other && Equals(in this, in other);
+
+        public bool Equals({def.Name} other)
+            => Equals(in this, in other);
+
+        public bool Equals(in {def.Name} other)
+            => Equals(in this, in other);
+");
+
+            builder.Append($@"
+        public static bool Equals(in {def.Name} a, in {def.Name} b)");
+
+            if (def.Members.Count < 3)
+            {
+                builder.Append($@"
+        {{
+            if (a.ValueType != b.ValueType)
+                return false;
+
+");
+
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+            if (a.ValueType == Type.{member.Name})
+                return EqualityComparer<{member.Type}>.Default.Equals(a.{member.Name}, b.{member.Name});");
+                }
+
+                builder.Append($@"
+
+            return false;
+        }}
+");
+            }
+            else
+            {
+                builder.Append($@"
+        {{
+            if (a.ValueType != b.ValueType)
+                return false;
+
+            switch (a.ValueType)
+            {{");
+
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+                case Type.{member.Name}: return EqualityComparer<{member.Type}>.Default.Equals(a.{member.Name}, b.{member.Name});");
+                }
+
+                builder.Append($@"
+            }}
+
+            return false;
+        }}
+");
+            }
+
+            builder.Append($@"
+        public static bool operator ==(in {def.Name} left, in {def.Name} right)
+            => Equals(in left, in right);
+
+        public static bool operator !=(in {def.Name} left, in {def.Name} right)
+            => !Equals(in left, in right);");
+        }
+
+        private static void AppendOperator_Implicit(StructDefinition def, StringBuilder builder)
+        {
+            var last = def.Members.Count - 1;
+
+            for (var i = 0; i < def.Members.Count; i++)
+            {
+                var member = def.Members[i];
+
+                if (i <= 0)
+                    builder.AppendLine();
+
+                builder.Append($@"
+        public static implicit operator {def.Name}({member.Type} value)
+            => new {def.Name}(value);
+");
+
+                builder.Append($@"
+        public static implicit operator {member.Type}(in {def.Name} value)
+            => value.m_{member.Name};");
+
+                if (i < last)
+                    builder.AppendLine();
+            }
+        }
+
+        private static void AppendOperator_ImplicitReadOnly(StructDefinition def, StringBuilder builder)
+        {
+            var last = def.Members.Count - 1;
+
+            for (var i = 0; i < def.Members.Count; i++)
+            {
+                var member = def.Members[i];
+
+                if (i <= 0)
+                    builder.AppendLine();
+
+                builder.Append($@"
+        public static implicit operator {def.Name}({member.Type} value)
+            => new {def.Name}(value);
+");
+
+                builder.Append($@"
+        public static implicit operator {member.Type}(in {def.Name} value)
+            => value.{member.Name};");
+
+                if (i < last)
+                    builder.AppendLine();
+            }
+        }
+
+        private static void AppendConstructors(StructDefinition def, StringBuilder builder)
+        {
+            var last = def.Members.Count - 1;
+
+            for (var i = 0; i < def.Members.Count; i++)
+            {
+                var member = def.Members[i];
+
+                if (i > 0)
+                    builder.AppendLine();
+
+                builder.Append($@"
+        public {def.Name}({member.Type} value)
+        {{
+            this.m_ValueType = Type.{member.Name};
+            this.m_{member.Name} = value;
+");
+
+                for (var k = 0; k < def.Members.Count; k++)
+                {
+                    if (k == i)
+                        continue;
+
+                    var memberOther = def.Members[k];
+
+                    builder.Append($@"
+            this.m_{memberOther.Name} = default;");
+                }
+
+                builder.Append(@"
+        }");
+
+                if (i == last)
+                    builder.AppendLine();
+            }
+        }
+
+        private static void AppendConstructorsReadOnly(StructDefinition def, StringBuilder builder)
+        {
+            var last = def.Members.Count - 1;
+
+            for (var i = 0; i < def.Members.Count; i++)
+            {
+                var member = def.Members[i];
+
+                if (i > 0)
+                    builder.AppendLine();
+
+                builder.Append($@"
+        public {def.Name}({member.Type} value)
+        {{
+            this.ValueType = Type.{member.Name};
+            this.{member.Name} = value;
+");
+
+                for (var k = 0; k < def.Members.Count; k++)
+                {
+                    if (k == i)
+                        continue;
+
+                    var memberOther = def.Members[k];
+
+                    builder.Append($@"
+            this.{memberOther.Name} = default;");
+                }
+
+                builder.Append(@"
+        }");
+
+                if (i == last)
+                    builder.AppendLine();
+            }
+        }
+
+        private static void AppendProps(StructDefinition def, StringBuilder builder)
+        {
+            if (def.IsReadOnly)
+            {
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+        [FieldOffset(1)]
+        public readonly {member.Type} {member.Name};
+");
                 }
             }
+            else
+            {
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+        [FieldOffset(1)]
+        private {member.Type} m_{member.Name};
+");
+                }
 
+                foreach (var member in def.Members)
+                {
+                    builder.Append($@"
+        public {member.Type} {member.Name} => this.m_{member.Name};
+");
+                }
+            }
+        }
+
+        private static void AppendEnum_Type(StructDefinition def, StringBuilder builder)
+        {
             var underlyingType = string.Empty;
-            var memberCount = (ulong)receiver.Members.Count;
+            var memberCount = (ulong)def.Members.Count;
 
             if (memberCount <= 255)
                 underlyingType = "byte";
@@ -88,58 +475,97 @@ namespace {receiver.Namespace}
             else
                 underlyingType = "ulong";
 
-            unionBuilder.Append($@"
+            builder.Append($@"
+    using System.Runtime.InteropServices;
+
     [StructLayout(LayoutKind.Explicit, Pack = 1)]
-    public partial struct {structName}
+    public partial struct {def.Name}
     {{
         public enum Type : {underlyingType}
         {{");
 
-            foreach(var member in receiver.Members)
+            foreach (var member in def.Members)
             {
-                unionBuilder.Append($@"
+                builder.Append($@"
             {member.Name},");
 
             }
 
-            unionBuilder.Append(@"
+            builder.Append(@"
         }
 ");
+        }
 
-            unionBuilder.Append(@"
-        [FieldOffset(0)]
-        public");
-
-            if (receiver.IsReadOnly)
-                unionBuilder.Append(" readonly");
-
-            unionBuilder.Append(@" Type ValueType;
-");
-
-            foreach (var member in receiver.Members)
+        private static void AppendProp_ValueType(StructDefinition def, StringBuilder builder)
+        {
+            if (def.IsReadOnly)
             {
-                unionBuilder.Append(@"
-        [FieldOffset(1)]
-        public ");
+                builder.Append(@"
+        [FieldOffset(0)]
+        public readonly Type ValueType;
+");
+            }
+            else
+            {
+                builder.Append(@"
+        [FieldOffset(0)]
+        private Type m_ValueType;
 
-                if (receiver.IsReadOnly)
-                    unionBuilder.Append("readonly ");
+        public Type ValueType => this.m_ValueType;
+");
+            }
+        }
 
-                unionBuilder.Append($"{member.Type} {member.Name};");
-                unionBuilder.AppendLine();
+        private static void AppendUsings(StructDefinition def, StringBuilder unionBuilder, StringBuilder usingBuilder)
+        {
+            foreach (var ns in def.GlobalNamespaces)
+            {
+                usingBuilder.AppendLine($"using {ns};");
             }
 
-            unionBuilder.Append(@"
-    }
-}");
-            usingBuilder.AppendLine(unionBuilder.ToString());
+            if (def.LocalNamespaces.Count > 0)
+            {
+                unionBuilder.AppendLine();
 
-            context.AddSource($"Union_{structName}.cs", SourceText.From(usingBuilder.ToString(), Encoding.UTF8));
+                foreach (var ns in def.LocalNamespaces)
+                {
+                    unionBuilder.AppendLine($"    using {ns};");
+                }
+            }
         }
 
         private class SyntaxReceiver : ISyntaxContextReceiver
         {
+            public List<StructDefinition> Structs { get; } = new List<StructDefinition>();
+
+            public void OnVisitSyntaxNode(GeneratorSyntaxContext context)
+            {
+                if (!(context.Node is StructDeclarationSyntax dec) ||
+                    dec.AttributeLists.Count <= 0)
+                    return;
+
+                if (StructDefinition.TryCreate(context, dec, out var def))
+                    this.Structs.Add(def);
+            }
+        }
+
+        public readonly struct Member
+        {
+            public readonly string Type;
+            public readonly string Name;
+
+            public Member(string type, string name)
+            {
+                this.Type = type;
+                this.Name = name;
+            }
+        }
+
+        public class StructDefinition
+        {
             public string Namespace { get; private set; }
+
+            public string Name { get; private set; }
 
             public StructDeclarationSyntax Struct { get; private set; }
 
@@ -151,12 +577,8 @@ namespace {receiver.Namespace}
 
             public List<Member> Members { get; } = new List<Member>();
 
-            public void OnVisitSyntaxNode(GeneratorSyntaxContext context)
+            public static bool TryCreate(GeneratorSyntaxContext context, StructDeclarationSyntax dec, out StructDefinition def)
             {
-                if (!(context.Node is StructDeclarationSyntax dec) ||
-                    dec.AttributeLists.Count <= 0)
-                    return;
-
                 AttributeSyntax attribute = null;
 
                 foreach (var attribList in dec.AttributeLists)
@@ -177,33 +599,42 @@ namespace {receiver.Namespace}
                 if (attribute == null ||
                     attribute.ArgumentList == null ||
                     attribute.ArgumentList.Arguments.Count != 1)
-                    return;
+                {
+                    def = default;
+                    return false;
+                }
 
                 var expression = attribute.ArgumentList.Arguments[0].Expression;
 
                 if (!(expression is TypeOfExpressionSyntax typeOf) ||
                     !(typeOf.Type is TupleTypeSyntax tuple) ||
                     tuple.Elements.Count <= 0)
-                    return;
+                {
+                    def = default;
+                    return false;
+                }
 
-                this.Struct = dec;
-                GetGlobalNamespaces(context);
-                GetLocalNamespaces(context);
+                def = new StructDefinition();
+                def.Name = dec.Identifier.ToString();
+                def.GetGlobalNamespaces(dec);
+                def.GetLocalNamespaces(dec);
 
                 foreach (var element in tuple.Elements)
                 {
-                    GetName(context, element, out var type, out var name);
-                    this.Members.Add(new Member(type, name));
+                    GetName(context.SemanticModel, element, out var type, out var name);
+                    def.Members.Add(new Member(type, name));
                 }
 
                 foreach (var keyword in dec.Modifiers)
                 {
                     if (string.Equals(keyword.ToString(), "readonly"))
-                        this.IsReadOnly = true;
+                        def.IsReadOnly = true;
                 }
+
+                return true;
             }
 
-            private void GetName(GeneratorSyntaxContext context, TupleElementSyntax element, out string typeName, out string name)
+            private static void GetName(SemanticModel semanticModel, TupleElementSyntax element, out string typeName, out string name)
             {
                 typeName = element.Type.ToString();
                 name = element.Identifier.ToString();
@@ -211,7 +642,7 @@ namespace {receiver.Namespace}
                 if (!string.IsNullOrWhiteSpace(name))
                     return;
 
-                var typeSymbol = context.SemanticModel.GetTypeInfo(element.Type).Type;
+                var typeSymbol = semanticModel.GetTypeInfo(element.Type).Type;
 
                 switch (typeSymbol.SpecialType)
                 {
@@ -244,9 +675,9 @@ namespace {receiver.Namespace}
                 }
             }
 
-            private void GetGlobalNamespaces(GeneratorSyntaxContext context)
+            private void GetGlobalNamespaces(StructDeclarationSyntax dec)
             {
-                var compilation = context.Node?.Parent?.Parent as CompilationUnitSyntax;
+                var compilation = dec.Parent?.Parent as CompilationUnitSyntax;
 
                 if (compilation == null)
                     return;
@@ -257,9 +688,9 @@ namespace {receiver.Namespace}
                 }
             }
 
-            private void GetLocalNamespaces(GeneratorSyntaxContext context)
+            private void GetLocalNamespaces(StructDeclarationSyntax dec)
             {
-                var namespaceDec = context.Node?.Parent as NamespaceDeclarationSyntax;
+                var namespaceDec = dec.Parent as NamespaceDeclarationSyntax;
 
                 if (namespaceDec == null)
                     return;
@@ -270,18 +701,6 @@ namespace {receiver.Namespace}
                 {
                     this.LocalNamespaces.Add(usingDirective.Name.ToString());
                 }
-            }
-        }
-
-        private readonly struct Member
-        {
-            public readonly string Type;
-            public readonly string Name;
-
-            public Member(string type, string name)
-            {
-                this.Type = type;
-                this.Name = name;
             }
         }
     }
