@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Numerics;
-using Unions;
+using MyLibrary.Unions;
 
 namespace MySourceConsumer
 {
@@ -18,6 +18,7 @@ namespace MySourceConsumer
 
             unsafe
             {
+                Write<IntFloat>();
                 Write<ByteNumber>();
                 Write<ShortNumber>();
                 Write<IntNumber>();
@@ -34,7 +35,8 @@ namespace MySourceConsumer
         }
     }
 
-    [Union(typeof((int Int, float Float)), InvalidValueAccess.ThrowException)]
+    [Union(typeof((int Int, float Float)))]
+    [UnionOperator(Op.Addition, Op.Decrement)]
     public partial struct IntFloat { }
 
     [Union(typeof((sbyte, byte)))]
