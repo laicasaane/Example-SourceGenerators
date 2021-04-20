@@ -12,20 +12,20 @@ namespace MySourceGenerators
     [Generator]
     public class AutoNotifyGenerator : ISourceGenerator
     {
-        private const string attributeText = @"
+        private const string attributeText = $@"
 using System;
 
-namespace MyLibrary
-{
+namespace {GeneratorConfig.Namespace}.AutoNotify
+{{
     [AttributeUsage(AttributeTargets.Field, Inherited = false, AllowMultiple = false)]
     [System.Diagnostics.Conditional(""AutoNotifyGenerator_DEBUG"")]
     public sealed class AutoNotifyAttribute : Attribute
-    {
-        public AutoNotifyAttribute() { }
+    {{
+        public AutoNotifyAttribute() {{ }}
 
-        public string PropertyName { get; set; }
-    }
-}
+        public string PropertyName {{ get; set; }}
+    }}
+}}
 ";
 
 
