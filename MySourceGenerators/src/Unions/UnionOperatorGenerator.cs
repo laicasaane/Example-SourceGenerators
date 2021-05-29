@@ -259,23 +259,23 @@ namespace {def.UnionDefinition.Namespace}
 
                     case UnionOperatorDefinition.Op.LogicalAnd:
                         if (isStrict)
-                            BinaryOperatorReturnBoolStrict(def, "&", unionBuilder);
+                            BinaryOperatorStrict(def, "&", unionBuilder);
                         else
-                            BinaryOperatorReturnBool(def, "&", unionBuilder);
+                            BinaryOperator(def, "&", unionBuilder);
                         break;
 
                     case UnionOperatorDefinition.Op.LogicalOr:
                         if (isStrict)
-                            BinaryOperatorReturnBoolStrict(def, "|", unionBuilder);
+                            BinaryOperatorStrict(def, "|", unionBuilder);
                         else
-                            BinaryOperatorReturnBool(def, "|", unionBuilder);
+                            BinaryOperator(def, "|", unionBuilder);
                         break;
 
                     case UnionOperatorDefinition.Op.LogicalExclusiveOr:
                         if (isStrict)
-                            BinaryOperatorReturnBoolStrict(def, "^", unionBuilder);
+                            BinaryOperatorStrict(def, "^", unionBuilder);
                         else
-                            BinaryOperatorReturnBool(def, "^", unionBuilder);
+                            BinaryOperator(def, "^", unionBuilder);
                         break;
 
                     case UnionOperatorDefinition.Op.LeftShift:
