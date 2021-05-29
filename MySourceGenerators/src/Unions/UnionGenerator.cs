@@ -12,20 +12,6 @@ using System;
 
 namespace {GeneratorConfig.Namespace}.Unions
 {{
-    public enum InvalidValueAccess
-    {{
-        Allow, ReturnDefault, ThrowException
-    }}
-
-    public class InvalidValueAccessException : InvalidCastException
-    {{
-        public InvalidValueAccessException() : base() {{ }}
-
-        public InvalidValueAccessException(string message) : base(message) {{ }}
-
-        public InvalidValueAccessException(string message, Exception innerException) : base(message, innerException) {{ }}
-    }}
-
     [AttributeUsage(AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
     public sealed class UnionAttribute : Attribute
     {{
@@ -43,6 +29,20 @@ namespace {GeneratorConfig.Namespace}.Unions
             this.TupleType = tupleType;
             this.InvalidValueAccess = invalidValueAccess;
         }}
+    }}
+
+    public enum InvalidValueAccess
+    {{
+        Allow, ReturnDefault, ThrowException
+    }}
+
+    public class InvalidValueAccessException : InvalidCastException
+    {{
+        public InvalidValueAccessException() : base() {{ }}
+
+        public InvalidValueAccessException(string message) : base(message) {{ }}
+
+        public InvalidValueAccessException(string message, Exception innerException) : base(message, innerException) {{ }}
     }}
 }}
 ";
@@ -89,28 +89,18 @@ namespace {def.Namespace}
             AppendEnum_Type(def, unionBuilder);
             AppendProp_ValueType(def, unionBuilder);
             AppendProps(def, unionBuilder);
+            AppendConstructors(def, unionBuilder);
+            AppendConstructorTypeParam(def, unionBuilder);
 
-            if (def.IsReadOnly && def.InvalidValueAccess == UnionDefinition.InvalidValueAccessStrategy.Allow)
-            {
-                AppendConstructors_ReadOnlyUnsafe(def, unionBuilder);
-                AppendMethod_TryGet_ReadOnlyUnsafe(def, unionBuilder);
-                AppendMethod_GetUnderlyingType_ReadOnlyUnsafe(def, unionBuilder);
-                AppendMethod_GetHashCode_ReadOnlyUnsafe(def, unionBuilder);
-                AppendMethod_Equals_ReadOnlyUnsafe(def, unionBuilder);
-                AppendMethod_ToString_ReadOnlyUnsafe(def, unionBuilder);
-                AppendOperator_Implicit_ReadOnlyUnsafe(def, unionBuilder);
-            }
-            else
-            {
-                AppendConstructors(def, unionBuilder);
+            if (!def.IsReadOnly)
                 AppendMethod_Set(def, unionBuilder);
-                AppendMethod_TryGet(def, unionBuilder);
-                AppendMethod_GetUnderlyingType(def, unionBuilder);
-                AppendMethod_GetHashCode(def, unionBuilder);
-                AppendMethod_Equals(def, unionBuilder);
-                AppendMethod_ToString(def, unionBuilder);
-                AppendOperator_Implicit(def, unionBuilder);
-            }
+
+            AppendMethod_TryGet(def, unionBuilder);
+            AppendMethod_GetUnderlyingType(def, unionBuilder);
+            AppendMethod_GetHashCode(def, unionBuilder);
+            AppendMethod_Equals(def, unionBuilder);
+            AppendMethod_ToString(def, unionBuilder);
+            AppendOperator_Implicit(def, unionBuilder);
 
             unionBuilder.Append(@"
     }
@@ -121,38 +111,20 @@ namespace {def.Namespace}
 
         private static void AppendMethod_TryGet(UnionDefinition def, StringBuilder builder)
         {
+            var pre_ = def.GetMemberPrefix();
+
             foreach (var member in def.Members)
             {
                 builder.Append($@"
         public bool TryGet(out {member.Type} value)
         {{
-            if (this.m_ValueType != Type.{member.Name})
+            if (this.{pre_}ValueType != Type.{member.Name})
             {{
                 value = default;
                 return false;
             }}
 
-            value = this.m_{member.Name};
-            return true;
-        }}
-");
-            }
-        }
-
-        private static void AppendMethod_TryGet_ReadOnlyUnsafe(UnionDefinition def, StringBuilder builder)
-        {
-            foreach (var member in def.Members)
-            {
-                builder.Append($@"
-        public bool TryGet(out {member.Type} value)
-        {{
-            if (this.ValueType != Type.{member.Name})
-            {{
-                value = default;
-                return false;
-            }}
-
-            value = this.{member.Name};
+            value = this.{pre_}{member.Name};
             return true;
         }}
 ");
@@ -161,6 +133,8 @@ namespace {def.Namespace}
 
         private static void AppendMethod_GetUnderlyingType(UnionDefinition def, StringBuilder builder)
         {
+            var pre_ = def.GetMemberPrefix();
+
             builder.Append($@"
         public System.Type GetUnderlyingType()");
 
@@ -172,8 +146,8 @@ namespace {def.Namespace}
                 foreach (var member in def.Members)
                 {
                     builder.Append($@"
-            if (this.m_ValueType == Type.{member.Name})
-                return this.m_{member.Name}.GetType();
+            if (this.{pre_}ValueType == Type.{member.Name})
+                return this.{pre_}{member.Name}.GetType();
 ");
                 }
 
@@ -184,60 +158,15 @@ namespace {def.Namespace}
             }
             else
             {
-                builder.Append(@"
-        {
-            switch (this.m_ValueType)
-            {");
+                builder.Append($@"
+        {{
+            switch (this.{pre_}ValueType)
+            {{");
 
                 foreach (var member in def.Members)
                 {
                     builder.Append($@"
-                case Type.{member.Name}: return this.m_{member.Name}.GetType();");
-                }
-
-                builder.Append(@"
-            }
-
-            return this.GetType();
-        }
-");
-            }
-        }
-
-        private static void AppendMethod_GetUnderlyingType_ReadOnlyUnsafe(UnionDefinition def, StringBuilder builder)
-        {
-            builder.Append($@"
-        public System.Type GetUnderlyingType()");
-
-            if (def.Members.Count < 3)
-            {
-                builder.Append(@"
-        {");
-
-                foreach (var member in def.Members)
-                {
-                    builder.Append($@"
-            if (this.ValueType == Type.{member.Name})
-                return this.{member.Name}.GetType();
-");
-                }
-
-                builder.Append(@"
-            return this.GetType();
-        }
-");
-            }
-            else
-            {
-                builder.Append(@"
-        {
-            switch (this.ValueType)
-            {");
-
-                foreach (var member in def.Members)
-                {
-                    builder.Append($@"
-                case Type.{member.Name}: return this.{member.Name}.GetType();");
+                case Type.{member.Name}: return this.{pre_}{member.Name}.GetType();");
                 }
 
                 builder.Append(@"
@@ -251,13 +180,15 @@ namespace {def.Namespace}
 
         private static void AppendMethod_Set(UnionDefinition def, StringBuilder builder)
         {
+            var pre_ = def.GetMemberPrefix();
+
             foreach (var member in def.Members)
             {
                 builder.Append($@"
         public void Set({member.Type} value)
         {{
-            this.m_ValueType = Type.{member.Name};
-            this.m_{member.Name} = value;
+            this.{pre_}ValueType = Type.{member.Name};
+            this.{pre_}{member.Name} = value;
         }}
 ");
             }
@@ -265,6 +196,8 @@ namespace {def.Namespace}
 
         private static void AppendMethod_ToString(UnionDefinition def, StringBuilder builder)
         {
+            var pre_ = def.GetMemberPrefix();
+
             builder.Append(@"
         public override string ToString()
         {");
@@ -274,8 +207,8 @@ namespace {def.Namespace}
                 foreach (var member in def.Members)
                 {
                     builder.Append($@"
-            if (this.m_ValueType == Type.{member.Name})
-                return this.m_{member.Name}.ToString();
+            if (this.{pre_}ValueType == Type.{member.Name})
+                return this.{pre_}{member.Name}.ToString();
 ");
                 }
 
@@ -285,54 +218,14 @@ namespace {def.Namespace}
             }
             else
             {
-                builder.Append(@"
-            switch (this.m_ValueType)
-            {");
+                builder.Append($@"
+            switch (this.{pre_}ValueType)
+            {{");
 
                 foreach (var member in def.Members)
                 {
                     builder.Append($@"
-                case Type.{member.Name}: return this.m_{member.Name}.ToString();");
-                }
-
-                builder.Append(@"
-            }
-
-            return string.Empty;
-        }");
-            }
-        }
-
-        private static void AppendMethod_ToString_ReadOnlyUnsafe(UnionDefinition def, StringBuilder builder)
-        {
-            builder.Append(@"
-        public override string ToString()
-        {");
-
-            if (def.Members.Count < 3)
-            {
-                foreach (var member in def.Members)
-                {
-                    builder.Append($@"
-            if (this.ValueType == Type.{member.Name})
-                return this.{member.Name}.ToString();
-");
-                }
-
-                builder.Append(@"
-            return string.Empty;
-        }");
-            }
-            else
-            {
-                builder.Append(@"
-            switch (this.ValueType)
-            {");
-
-                foreach (var member in def.Members)
-                {
-                    builder.Append($@"
-                case Type.{member.Name}: return this.{member.Name}.ToString();");
+                case Type.{member.Name}: return this.{pre_}{member.Name}.ToString();");
                 }
 
                 builder.Append(@"
@@ -345,10 +238,12 @@ namespace {def.Namespace}
 
         private static void AppendMethod_GetHashCode(UnionDefinition def, StringBuilder builder)
         {
-            builder.Append(@"
+            var pre_ = def.GetMemberPrefix();
+
+            builder.Append($@"
         public override int GetHashCode()
-        {
-            var hash = EqualityComparer<Type>.Default.GetHashCode(this.m_ValueType) * -1521134295;
+        {{
+            var hash = EqualityComparer<Type>.Default.GetHashCode(this.{pre_}ValueType) * -1521134295;
 ");
 
             if (def.Members.Count < 3)
@@ -356,8 +251,8 @@ namespace {def.Namespace}
                 foreach (var member in def.Members)
                 {
                     builder.Append($@"
-            if (this.m_ValueType == Type.{member.Name})
-                return hash + EqualityComparer<{member.Type}>.Default.GetHashCode(this.m_{member.Name});
+            if (this.{pre_}ValueType == Type.{member.Name})
+                return hash + EqualityComparer<{member.Type}>.Default.GetHashCode(this.{pre_}{member.Name});
 ");
                 }
 
@@ -368,58 +263,14 @@ namespace {def.Namespace}
             }
             else
             {
-                builder.Append(@"
-            switch (this.m_ValueType)
-            {");
+                builder.Append($@"
+            switch (this.{pre_}ValueType)
+            {{");
 
                 foreach (var member in def.Members)
                 {
                     builder.Append($@"
-                case Type.{member.Name}: return hash + EqualityComparer<{member.Type}>.Default.GetHashCode(this.m_{member.Name});");
-                }
-
-                builder.Append(@"
-            }
-
-            return hash;
-        }
-");
-            }
-        }
-
-        private static void AppendMethod_GetHashCode_ReadOnlyUnsafe(UnionDefinition def, StringBuilder builder)
-        {
-            builder.Append(@"
-        public override int GetHashCode()
-        {
-            var hash = EqualityComparer<Type>.Default.GetHashCode(this.ValueType) * -1521134295;
-");
-
-            if (def.Members.Count < 3)
-            {
-                foreach (var member in def.Members)
-                {
-                    builder.Append($@"
-            if (this.ValueType == Type.{member.Name})
-                return hash + EqualityComparer<{member.Type}>.Default.GetHashCode(this.{member.Name});
-");
-                }
-
-                builder.Append(@"
-            return hash;
-        }
-");
-            }
-            else
-            {
-                builder.Append(@"
-            switch (this.ValueType)
-            {");
-
-                foreach (var member in def.Members)
-                {
-                    builder.Append($@"
-                case Type.{member.Name}: return hash + EqualityComparer<{member.Type}>.Default.GetHashCode(this.{member.Name});");
+                case Type.{member.Name}: return hash + EqualityComparer<{member.Type}>.Default.GetHashCode(this.{pre_}{member.Name});");
                 }
 
                 builder.Append(@"
@@ -433,6 +284,8 @@ namespace {def.Namespace}
 
         private static void AppendMethod_Equals(UnionDefinition def, StringBuilder builder)
         {
+            var pre_ = def.GetMemberPrefix();
+
             builder.Append($@"
         public override bool Equals(object obj)
             => obj is {def.Name} other && Equals(in this, in other);
@@ -449,17 +302,17 @@ namespace {def.Namespace}
 
             if (def.Members.Count < 3)
             {
-                builder.Append(@"
-        {
-            if (a.m_ValueType != b.m_ValueType)
+                builder.Append($@"
+        {{
+            if (a.{pre_}ValueType != b.{pre_}ValueType)
                 return false;
 ");
 
                 foreach (var member in def.Members)
                 {
                     builder.Append($@"
-            if (a.m_ValueType == Type.{member.Name})
-                return EqualityComparer<{member.Type}>.Default.Equals(a.m_{member.Name}, b.m_{member.Name});
+            if (a.{pre_}ValueType == Type.{member.Name})
+                return EqualityComparer<{member.Type}>.Default.Equals(a.{pre_}{member.Name}, b.{pre_}{member.Name});
 ");
                 }
 
@@ -470,88 +323,18 @@ namespace {def.Namespace}
             }
             else
             {
-                builder.Append(@"
-        {
-            if (a.m_ValueType != b.m_ValueType)
+                builder.Append($@"
+        {{
+            if (a.{pre_}ValueType != b.{pre_}ValueType)
                 return false;
 
-            switch (a.m_ValueType)
-            {");
+            switch (a.{pre_}ValueType)
+            {{");
 
                 foreach (var member in def.Members)
                 {
                     builder.Append($@"
-                case Type.{member.Name}: return EqualityComparer<{member.Type}>.Default.Equals(a.m_{member.Name}, b.m_{member.Name});");
-                }
-
-                builder.Append(@"
-            }
-
-            return false;
-        }
-");
-            }
-
-            builder.Append($@"
-        public static bool operator ==(in {def.Name} left, in {def.Name} right)
-            => Equals(in left, in right);
-
-        public static bool operator !=(in {def.Name} left, in {def.Name} right)
-            => !Equals(in left, in right);
-");
-        }
-
-        private static void AppendMethod_Equals_ReadOnlyUnsafe(UnionDefinition def, StringBuilder builder)
-        {
-            builder.Append($@"
-        public override bool Equals(object obj)
-            => obj is {def.Name} other && Equals(in this, in other);
-
-        public bool Equals({def.Name} other)
-            => Equals(in this, in other);
-
-        public bool Equals(in {def.Name} other)
-            => Equals(in this, in other);
-");
-
-            builder.Append($@"
-        public static bool Equals(in {def.Name} a, in {def.Name} b)");
-
-            if (def.Members.Count < 3)
-            {
-                builder.Append(@"
-        {
-            if (a.ValueType != b.ValueType)
-                return false;
-");
-
-                foreach (var member in def.Members)
-                {
-                    builder.Append($@"
-            if (a.ValueType == Type.{member.Name})
-                return EqualityComparer<{member.Type}>.Default.Equals(a.{member.Name}, b.{member.Name});
-");
-                }
-
-                builder.Append(@"
-            return false;
-        }
-");
-            }
-            else
-            {
-                builder.Append(@"
-        {
-            if (a.ValueType != b.ValueType)
-                return false;
-
-            switch (a.ValueType)
-            {");
-
-                foreach (var member in def.Members)
-                {
-                    builder.Append($@"
-                case Type.{member.Name}: return EqualityComparer<{member.Type}>.Default.Equals(a.{member.Name}, b.{member.Name});");
+                case Type.{member.Name}: return EqualityComparer<{member.Type}>.Default.Equals(a.{pre_}{member.Name}, b.{pre_}{member.Name});");
                 }
 
                 builder.Append(@"
@@ -573,6 +356,7 @@ namespace {def.Namespace}
 
         private static void AppendOperator_Implicit(UnionDefinition def, StringBuilder builder)
         {
+            var pre_ = def.GetMemberPrefix();
             var last = def.Members.Count - 1;
 
             switch (def.InvalidValueAccess)
@@ -594,8 +378,8 @@ namespace {def.Namespace}
                             builder.Append($@"
         public static implicit operator {member.Type}(in {def.Name} value)
         {{
-            if (value.m_ValueType == Type.{member.Name})
-                return value.m_{member.Name};
+            if (value.{pre_}ValueType == Type.{member.Name})
+                return value.{pre_}{member.Name};
 
             throw new InvalidValueAccessException($""Cannot implicitly convert underlying type '{{value.GetUnderlyingType().GetNiceFullName()}}' to '{member.Type}'"");
         }}");
@@ -623,8 +407,8 @@ namespace {def.Namespace}
                             builder.Append($@"
         public static implicit operator {member.Type}(in {def.Name} value)
         {{
-            if (value.m_ValueType == Type.{member.Name})
-                return value.m_{member.Name};
+            if (value.{pre_}ValueType == Type.{member.Name})
+                return value.{pre_}{member.Name};
 
             return default;
         }}");
@@ -651,7 +435,7 @@ namespace {def.Namespace}
 
                             builder.Append($@"
         public static implicit operator {member.Type}(in {def.Name} value)
-            => value.m_{member.Name};");
+            => value.{pre_}{member.Name};");
 
                             if (i < last)
                                 builder.AppendLine();
@@ -661,33 +445,30 @@ namespace {def.Namespace}
             }
         }
 
-        private static void AppendOperator_Implicit_ReadOnlyUnsafe(UnionDefinition def, StringBuilder builder)
+        private static void AppendConstructorTypeParam(UnionDefinition def, StringBuilder builder)
         {
-            var last = def.Members.Count - 1;
+            var pre_ = def.GetMemberPrefix();
 
-            for (var i = 0; i < def.Members.Count; i++)
-            {
-                var member = def.Members[i];
-
-                if (i <= 0)
-                    builder.AppendLine();
-
-                builder.Append($@"
-        public static implicit operator {def.Name}({member.Type} value)
-            => new {def.Name}(value);
+            builder.Append($@"
+        public {def.Name}(Type type)
+        {{
+            this.{pre_}ValueType = type;
 ");
 
+            foreach (var member in def.Members)
+            {
                 builder.Append($@"
-        public static implicit operator {member.Type}(in {def.Name} value)
-            => value.{member.Name};");
-
-                if (i < last)
-                    builder.AppendLine();
+            this.{pre_}{member.Name} = default;");
             }
+
+            builder.Append(@"
+        }
+");
         }
 
         private static void AppendConstructors(UnionDefinition def, StringBuilder builder)
         {
+            var pre_ = def.GetMemberPrefix();
             var last = def.Members.Count - 1;
 
             for (var i = 0; i < def.Members.Count; i++)
@@ -700,7 +481,7 @@ namespace {def.Namespace}
                 builder.Append($@"
         public {def.Name}({member.Type} value)
         {{
-            this.m_ValueType = Type.{member.Name};
+            this.{pre_}ValueType = Type.{member.Name};
 ");
 
                 for (var k = 0; k < def.Members.Count; k++)
@@ -711,50 +492,12 @@ namespace {def.Namespace}
                     var memberOther = def.Members[k];
 
                     builder.Append($@"
-            this.m_{memberOther.Name} = default;");
+            this.{pre_}{memberOther.Name} = default;");
                 }
 
                 builder.Append($@"
 
-            this.m_{member.Name} = value;
-        }}");
-
-                if (i == last)
-                    builder.AppendLine();
-            }
-        }
-
-        private static void AppendConstructors_ReadOnlyUnsafe(UnionDefinition def, StringBuilder builder)
-        {
-            var last = def.Members.Count - 1;
-
-            for (var i = 0; i < def.Members.Count; i++)
-            {
-                var member = def.Members[i];
-
-                if (i > 0)
-                    builder.AppendLine();
-
-                builder.Append($@"
-        public {def.Name}({member.Type} value)
-        {{
-            this.ValueType = Type.{member.Name};
-");
-
-                for (var k = 0; k < def.Members.Count; k++)
-                {
-                    if (k == i)
-                        continue;
-
-                    var memberOther = def.Members[k];
-
-                    builder.Append($@"
-            this.{memberOther.Name} = default;");
-                }
-
-                builder.Append($@"
-
-            this.{member.Name} = value;
+            this.{pre_}{member.Name} = value;
         }}");
 
                 if (i == last)
@@ -842,6 +585,28 @@ namespace {def.Namespace}
             }
         }
 
+        private static void AppendProp_ValueType(UnionDefinition def, StringBuilder builder)
+        {
+            if (def.IsReadOnly && def.InvalidValueAccess == UnionDefinition.InvalidValueAccessStrategy.Allow)
+            {
+                builder.Append(@"
+        [FieldOffset(0)]
+        public readonly Type ValueType;
+");
+            }
+            else
+            {
+                var readonlyKeyword = def.IsReadOnly ? "readonly " : string.Empty;
+
+                builder.Append($@"
+        [FieldOffset(0)]
+        private {readonlyKeyword}Type m_ValueType;
+
+        public Type ValueType => this.m_ValueType;
+");
+            }
+        }
+
         private static void AppendEnum_Type(UnionDefinition def, StringBuilder builder)
         {
             var underlyingType = string.Empty;
@@ -876,28 +641,6 @@ namespace {def.Namespace}
             builder.Append(@"
         }
 ");
-        }
-
-        private static void AppendProp_ValueType(UnionDefinition def, StringBuilder builder)
-        {
-            if (def.IsReadOnly && def.InvalidValueAccess == UnionDefinition.InvalidValueAccessStrategy.Allow)
-            {
-                builder.Append(@"
-        [FieldOffset(0)]
-        public readonly Type ValueType;
-");
-            }
-            else
-            {
-                var readonlyKeyword = def.IsReadOnly ? "readonly " : string.Empty;
-
-                builder.Append($@"
-        [FieldOffset(0)]
-        private {readonlyKeyword}Type m_ValueType;
-
-        public Type ValueType => this.m_ValueType;
-");
-            }
         }
 
         private static void AppendUsings(UnionDefinition def, StringBuilder unionBuilder, StringBuilder usingBuilder)

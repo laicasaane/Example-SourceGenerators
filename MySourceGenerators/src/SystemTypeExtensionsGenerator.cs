@@ -40,6 +40,9 @@ namespace {GeneratorConfig.Namespace}
         {{
             name = default;
 
+            if (!string.Equals(self.Namespace, nameof(System)))
+                return false;
+
             switch (self.Name)
             {{");
 

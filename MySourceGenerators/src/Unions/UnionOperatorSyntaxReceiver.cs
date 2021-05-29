@@ -55,16 +55,6 @@ namespace MySourceGenerators.Unions
             Decrement,
 
             /// <summary>
-            /// true
-            /// </summary>
-            True,
-
-            /// <summary>
-            /// false
-            /// </summary>
-            False,
-
-            /// <summary>
             /// x + y
             /// </summary>
             Addition,
@@ -90,7 +80,7 @@ namespace MySourceGenerators.Unions
             Remainder,
 
             /// <summary>
-            /// x & y
+            /// x &amp; y
             /// </summary>
             LogicalAnd,
 
@@ -105,49 +95,55 @@ namespace MySourceGenerators.Unions
             LogicalExclusiveOr,
 
             /// <summary>
-            /// x << y
+            /// x &lt;&lt; y
             /// </summary>
             LeftShift,
 
             /// <summary>
-            /// x >> y
+            /// x &gt;&gt; y
             /// </summary>
             RightShift,
 
             /// <summary>
-            /// x == y
+            /// x &lt; y and x &gt; y
             /// </summary>
-            Equality,
+            LessAndGreaterThan,
 
             /// <summary>
-            /// x != y
+            /// x &lt;= y and x &gt;= y
             /// </summary>
-            Inequality,
+            LessAndGreaterThanOrEqual,
+        }
+
+        public enum OperandTypeHandlingStrategy
+        {
+            /// <summary>
+            /// Allow implicit casting if operand types are different.
+            /// </summary>
+            Implicit,
 
             /// <summary>
-            /// x < y
+            /// <para>Operands must be of the same type. Otherwise use the <see cref="UnionDefinition.InvalidValueAccess"/> argument to decide what should be returned by the operator.</para>
+            /// <para>If no exception is thrown, a default value based on left operand will be returned.</para>
             /// </summary>
-            LessThan,
+            Strict
+        }
 
-            /// <summary>
-            /// x > y
-            /// </summary>
-            GreaterThan,
+        public readonly struct Operator
+        {
+            public readonly Op Value;
+            public readonly OperandTypeHandlingStrategy OperandTypeHandling;
 
-            /// <summary>
-            /// x <= y
-            /// </summary>
-            LessThanOrEqual,
-
-            /// <summary>
-            /// x >= y
-            /// </summary>
-            GreaterThanOrEqual
+            public Operator(Op value, OperandTypeHandlingStrategy typeHandling)
+            {
+                this.Value = value;
+                this.OperandTypeHandling = typeHandling;
+            }
         }
 
         public UnionDefinition UnionDefinition { get; private set; }
 
-        public HashSet<Op> Operators { get; } = new HashSet<Op>();
+        public List<Operator> Operators { get; } = new List<Operator>();
 
         public static bool TryCreate(GeneratorSyntaxContext context, StructDeclarationSyntax dec, out UnionOperatorDefinition def)
         {
@@ -157,7 +153,7 @@ namespace MySourceGenerators.Unions
                 return false;
             }
 
-            AttributeSyntax attribute = null;
+            var attributes = new List<AttributeSyntax>();
 
             foreach (var attribList in dec.AttributeLists)
             {
@@ -168,32 +164,57 @@ namespace MySourceGenerators.Unions
                     if (string.Equals(name, "UnionOperator") ||
                         string.Equals(name, "UnionOperatorAttribute"))
                     {
-                        attribute = attrib;
+                        attributes.Add(attrib);
                         break;
                     }
                 }
             }
 
-            if (attribute == null ||
-                attribute.ArgumentList == null ||
-                attribute.ArgumentList.Arguments.Count < 1)
+            if (attributes.Count < 1)
             {
                 def = default;
                 return false;
             }
 
-            var operators = new List<Op>();
+            var operators = new List<Operator>();
+            var operatorSet = new HashSet<Op>();
+            var operatorList = new List<Op>();
 
-            foreach (var arg in attribute.ArgumentList.Arguments)
+            foreach (var attribute in attributes)
             {
-                if (!(arg.Expression is MemberAccessExpressionSyntax memberAccess) ||
-                    !string.Equals(memberAccess.Expression.ToString(), nameof(Op)))
-                    continue;
+                var operandTypeHandling = OperandTypeHandlingStrategy.Implicit;
 
-                if (Enum.TryParse<Op>(memberAccess.Name.ToString(), true, out var value))
+                foreach (var arg in attribute.ArgumentList.Arguments)
                 {
-                    operators.Add(value);
+                    if (!(arg.Expression is MemberAccessExpressionSyntax memberAccess))
+                        continue;
+
+                    var memberName = memberAccess.Expression.ToString();
+
+                    if (string.Equals(memberName, nameof(Op)))
+                    {
+                        if (Enum.TryParse<Op>(memberAccess.Name.ToString(), true, out var value) &&
+                            !operatorSet.Contains(value))
+                        {
+                            operatorSet.Add(value);
+                            operatorList.Add(value);
+                        }
+                    }
+                    else if (string.Equals(memberName, "OperandTypeHandling"))
+                    {
+                        if (Enum.TryParse<OperandTypeHandlingStrategy>(memberAccess.Name.ToString(), true, out var value))
+                        {
+                            operandTypeHandling = value;
+                        }
+                    }
                 }
+
+                foreach (var op in operatorList)
+                {
+                    operators.Add(new Operator(op, operandTypeHandling));
+                }
+
+                operatorList.Clear();
             }
 
             if (operators.Count < 1)

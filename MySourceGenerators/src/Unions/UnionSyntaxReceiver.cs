@@ -56,6 +56,9 @@ namespace MySourceGenerators.Unions
 
         public List<MemberDefinition> Members { get; } = new List<MemberDefinition>();
 
+        public string GetMemberPrefix()
+            => (this.IsReadOnly && this.InvalidValueAccess == InvalidValueAccessStrategy.Allow) ? string.Empty : "m_";
+
         public static bool TryCreate(GeneratorSyntaxContext context, StructDeclarationSyntax dec, out UnionDefinition def)
         {
             AttributeSyntax attribute = null;
