@@ -1,4 +1,4 @@
-namespace MySourceGenerators
+namespace MyLibrary
 {
     public static class BuiltInTypeHelper
     {

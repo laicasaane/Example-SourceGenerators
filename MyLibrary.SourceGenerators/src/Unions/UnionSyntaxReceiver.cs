@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 
-namespace MySourceGenerators.Unions
+namespace MyLibrary.Unions.SourceGen
 {
     public class UnionSyntaxReceiver : ISyntaxContextReceiver
     {
@@ -35,11 +35,6 @@ namespace MySourceGenerators.Unions
             }
         }
 
-        public enum InvalidValueAccessStrategy
-        {
-            Allow, ReturnDefault, ThrowException
-        }
-
         public string Namespace { get; private set; }
 
         public string Name { get; private set; }
@@ -48,7 +43,7 @@ namespace MySourceGenerators.Unions
 
         public bool IsReadOnly { get; private set; }
 
-        public InvalidValueAccessStrategy InvalidValueAccess { get; private set; }
+        public InvalidValueAccess InvalidValueAccess { get; private set; }
 
         public HashSet<string> GlobalNamespaces { get; } = new HashSet<string>();
 
@@ -57,7 +52,7 @@ namespace MySourceGenerators.Unions
         public List<MemberDefinition> Members { get; } = new List<MemberDefinition>();
 
         public string GetMemberPrefix()
-            => (this.IsReadOnly && this.InvalidValueAccess == InvalidValueAccessStrategy.Allow) ? string.Empty : "m_";
+            => (this.IsReadOnly && this.InvalidValueAccess == InvalidValueAccess.Allow) ? string.Empty : "m_";
 
         public static bool TryCreate(GeneratorSyntaxContext context, StructDeclarationSyntax dec, out UnionDefinition def)
         {
@@ -108,9 +103,11 @@ namespace MySourceGenerators.Unions
                 return false;
             }
 
-            def = new UnionDefinition();
-            def.Name = dec.Identifier.ToString();
-            def.InvalidValueAccess = InvalidValueAccessStrategy.Allow;
+            def = new UnionDefinition {
+                Name = dec.Identifier.ToString(),
+                InvalidValueAccess = InvalidValueAccess.Allow
+            };
+
             def.GetGlobalNamespaces(dec);
             def.GetLocalNamespaces(dec);
 
@@ -129,7 +126,7 @@ namespace MySourceGenerators.Unions
             if (memberAccess != null &&
                 string.Equals(memberAccess.Expression.ToString(), nameof(InvalidValueAccess)))
             {
-                if (Enum.TryParse<InvalidValueAccessStrategy>(memberAccess.Name.ToString(), true, out var value))
+                if (Enum.TryParse<InvalidValueAccess>(memberAccess.Name.ToString(), true, out var value))
                 {
                     def.InvalidValueAccess = value;
                 }
@@ -183,9 +180,7 @@ namespace MySourceGenerators.Unions
 
         private void GetGlobalNamespaces(StructDeclarationSyntax dec)
         {
-            var compilation = dec.Parent?.Parent as CompilationUnitSyntax;
-
-            if (compilation == null)
+            if (!(dec.Parent?.Parent is CompilationUnitSyntax compilation))
                 return;
 
             foreach (var usingDirective in compilation.Usings)
@@ -196,9 +191,7 @@ namespace MySourceGenerators.Unions
 
         private void GetLocalNamespaces(StructDeclarationSyntax dec)
         {
-            var namespaceDec = dec.Parent as NamespaceDeclarationSyntax;
-
-            if (namespaceDec == null)
+            if (!(dec.Parent is NamespaceDeclarationSyntax namespaceDec))
                 return;
 
             this.Namespace = namespaceDec.Name.ToString();

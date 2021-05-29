@@ -2,57 +2,13 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using System.Text;
 
-namespace MySourceGenerators.Unions
+namespace MyLibrary.Unions.SourceGen
 {
     [Generator]
     public class UnionGenerator : ISourceGenerator
     {
-        private const string _attributeText = $@"
-using System;
-
-namespace {GeneratorConfig.Namespace}.Unions
-{{
-    [AttributeUsage(AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
-    public sealed class UnionAttribute : Attribute
-    {{
-        public Type TupleType {{ get; }}
-
-        public InvalidValueAccess InvalidValueAccess {{ get; }}
-
-        public UnionAttribute(Type tupleType)
-        {{
-            this.TupleType = tupleType;
-        }}
-
-        public UnionAttribute(Type tupleType, InvalidValueAccess invalidValueAccess)
-        {{
-            this.TupleType = tupleType;
-            this.InvalidValueAccess = invalidValueAccess;
-        }}
-    }}
-
-    public enum InvalidValueAccess
-    {{
-        Allow, ReturnDefault, ThrowException
-    }}
-
-    public class InvalidValueAccessException : InvalidCastException
-    {{
-        public InvalidValueAccessException() : base() {{ }}
-
-        public InvalidValueAccessException(string message) : base(message) {{ }}
-
-        public InvalidValueAccessException(string message, Exception innerException) : base(message, innerException) {{ }}
-    }}
-}}
-";
-
         public void Initialize(GeneratorInitializationContext context)
         {
-            // Register the attribute source
-            context.RegisterForPostInitialization((i) => i.AddSource("UnionAttribute", _attributeText));
-
-            // Register a factory that can create our custom syntax receiver
             context.RegisterForSyntaxNotifications(() => new UnionSyntaxReceiver());
         }
 
@@ -361,7 +317,7 @@ namespace {def.Namespace}
 
             switch (def.InvalidValueAccess)
             {
-                case UnionDefinition.InvalidValueAccessStrategy.ThrowException:
+                case InvalidValueAccess.ThrowException:
                     {
                         for (var i = 0; i < def.Members.Count; i++)
                         {
@@ -390,7 +346,7 @@ namespace {def.Namespace}
                         break;
                     }
 
-                case UnionDefinition.InvalidValueAccessStrategy.ReturnDefault:
+                case InvalidValueAccess.ReturnDefault:
                     {
                         for (var i = 0; i < def.Members.Count; i++)
                         {
@@ -507,7 +463,7 @@ namespace {def.Namespace}
 
         private static void AppendProps(UnionDefinition def, StringBuilder builder)
         {
-            if (def.IsReadOnly && def.InvalidValueAccess == UnionDefinition.InvalidValueAccessStrategy.Allow)
+            if (def.IsReadOnly && def.InvalidValueAccess == InvalidValueAccess.Allow)
             {
                 foreach (var member in def.Members)
                 {
@@ -532,7 +488,7 @@ namespace {def.Namespace}
 
             switch (def.InvalidValueAccess)
             {
-                case UnionDefinition.InvalidValueAccessStrategy.ThrowException:
+                case InvalidValueAccess.ThrowException:
                     {
                         foreach (var member in def.Members)
                         {
@@ -552,7 +508,7 @@ namespace {def.Namespace}
                         break;
                     }
 
-                case UnionDefinition.InvalidValueAccessStrategy.ReturnDefault:
+                case InvalidValueAccess.ReturnDefault:
                     {
                         foreach (var member in def.Members)
                         {
@@ -587,7 +543,7 @@ namespace {def.Namespace}
 
         private static void AppendProp_ValueType(UnionDefinition def, StringBuilder builder)
         {
-            if (def.IsReadOnly && def.InvalidValueAccess == UnionDefinition.InvalidValueAccessStrategy.Allow)
+            if (def.IsReadOnly && def.InvalidValueAccess == InvalidValueAccess.Allow)
             {
                 builder.Append(@"
         [FieldOffset(0)]
@@ -609,7 +565,7 @@ namespace {def.Namespace}
 
         private static void AppendEnum_Type(UnionDefinition def, StringBuilder builder)
         {
-            var underlyingType = string.Empty;
+            string underlyingType;
             var memberCount = (ulong)def.Members.Count;
 
             if (memberCount <= 255)

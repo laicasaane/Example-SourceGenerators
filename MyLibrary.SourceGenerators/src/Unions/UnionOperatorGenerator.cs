@@ -1,165 +1,14 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
-using System;
-using System.Collections.Generic;
 using System.Text;
 
-namespace MySourceGenerators.Unions
+namespace MyLibrary.Unions.SourceGen
 {
     [Generator]
     public class UnionOperatorGenerator : ISourceGenerator
     {
-        private const string _attributeText = $@"
-using System;
-using System.Collections.Generic;
-
-namespace {GeneratorConfig.Namespace}.Unions
-{{
-    public enum Op
-    {{
-        /// <summary>
-        /// +x
-        /// </summary>
-        UnaryPlus,
-
-        /// <summary>
-        /// -x
-        /// </summary>
-        UnaryMinus,
-
-        /// <summary>
-        /// !x
-        /// </summary>
-        LogicalNegation,
-
-        /// <summary>
-        /// ~x
-        /// </summary>
-        BitwiseComplement,
-
-        /// <summary>
-        /// ++x
-        /// </summary>
-        Increment,
-
-        /// <summary>
-        /// --x
-        /// </summary>
-        Decrement,
-
-        /// <summary>
-        /// x + y
-        /// </summary>
-        Addition,
-
-        /// <summary>
-        /// x - y
-        /// </summary>
-        Subtraction,
-
-        /// <summary>
-        /// x * y
-        /// </summary>
-        Multiplication,
-
-        /// <summary>
-        /// x / y
-        /// </summary>
-        Division,
-
-        /// <summary>
-        /// x % y
-        /// </summary>
-        Remainder,
-
-        /// <summary>
-        /// x &amp; y
-        /// </summary>
-        LogicalAnd,
-
-        /// <summary>
-        /// x | y
-        /// </summary>
-        LogicalOr,
-
-        /// <summary>
-        /// x ^ y
-        /// </summary>
-        LogicalExclusiveOr,
-
-        /// <summary>
-        /// x &lt;&lt; y
-        /// </summary>
-        LeftShift,
-
-        /// <summary>
-        /// x &gt;&gt; y
-        /// </summary>
-        RightShift,
-
-        /// <summary>
-        /// x &lt; y and x &gt; y
-        /// </summary>
-        LessAndGreaterThan,
-
-        /// <summary>
-        /// x &lt;= y and x &gt;= y
-        /// </summary>
-        LessAndGreaterThanOrEqual
-    }}
-
-    public enum OperandTypeHandling
-    {{
-        /// <summary>
-        /// Allow implicit casting if operand types are different.
-        /// </summary>
-        Implicit,
-
-        /// <summary>
-        /// <para>Operands must be of the same type. Otherwise use the <see cref=""InvalidValueAccess""/> argument to decide the behaviour of the operator.</para>
-        /// <para>If no exception is thrown, a default value based on the left operand will be returned.</para>
-        /// </summary>
-        Strict
-    }}
-
-    [AttributeUsage(AttributeTargets.Struct, Inherited = false, AllowMultiple = true)]
-    public sealed class UnionOperatorAttribute : Attribute
-    {{
-        public HashSet<Op> Operators {{ get; }} = new HashSet<Op>();
-
-        public OperandTypeHandling OperandTypeHandling {{ get; }}
-
-        public UnionOperatorAttribute(Op operator1, params Op[] operators)
-        {{
-            this.OperandTypeHandling = OperandTypeHandling.Implicit;
-
-            this.Operators.Add(operator1);
-
-            foreach (var op in operators)
-            {{
-                this.Operators.Add(op);
-            }}
-        }}
-
-        public UnionOperatorAttribute(OperandTypeHandling operandTypeHandling, params Op[] operators)
-        {{
-            this.OperandTypeHandling = operandTypeHandling;
-
-            foreach (var op in operators)
-            {{
-                this.Operators.Add(op);
-            }}
-        }}
-    }}
-}}
-";
-
         public void Initialize(GeneratorInitializationContext context)
         {
-            // Register the attribute source
-            context.RegisterForPostInitialization((i) => i.AddSource("UnionOperatorAttribute", _attributeText));
-
-            // Register a factory that can create our custom syntax receiver
             context.RegisterForSyntaxNotifications(() => new UnionOperatorSyntaxReceiver());
         }
 
@@ -194,105 +43,105 @@ namespace {def.UnionDefinition.Namespace}
 
             foreach (var op in def.Operators)
             {
-                var isStrict = op.OperandTypeHandling == UnionOperatorDefinition.OperandTypeHandlingStrategy.Strict;
+                var isStrict = op.OperandTypeHandling == OperandTypeHandling.Strict;
 
                 switch (op.Value)
                 {
-                    case UnionOperatorDefinition.Op.UnaryPlus:
+                    case Op.UnaryPlus:
                         UnaryPlus(def, unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.UnaryMinus:
+                    case Op.UnaryMinus:
                         UnaryMinus(def, unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.LogicalNegation:
+                    case Op.LogicalNegation:
                         UnaryOperatorReturnBool(def, "!", unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.BitwiseComplement:
+                    case Op.BitwiseComplement:
                         UnaryBitwiseComplement(def, unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.Increment:
+                    case Op.Increment:
                         UnaryIncrement(def, unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.Decrement:
+                    case Op.Decrement:
                         UnaryDecrement(def, unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.Addition:
+                    case Op.Addition:
                         if (isStrict)
                             BinaryOperatorStrict(def, "+", unionBuilder);
                         else
                             BinaryOperator(def, "+", unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.Subtraction:
+                    case Op.Subtraction:
                         if (isStrict)
                             BinaryOperatorStrict(def, "-", unionBuilder);
                         else
                             BinaryOperator(def, "-", unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.Multiplication:
+                    case Op.Multiplication:
                         if (isStrict)
                             BinaryOperatorStrict(def, "*", unionBuilder);
                         else
                             BinaryOperator(def, "*", unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.Division:
+                    case Op.Division:
                         if (isStrict)
                             BinaryOperatorStrict(def, "/", unionBuilder);
                         else
                             BinaryOperator(def, "/", unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.Remainder:
+                    case Op.Remainder:
                         if (isStrict)
                             BinaryOperatorStrict(def, "%", unionBuilder);
                         else
                             BinaryOperator(def, "%", unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.LogicalAnd:
+                    case Op.LogicalAnd:
                         if (isStrict)
                             BinaryOperatorStrict(def, "&", unionBuilder);
                         else
                             BinaryOperator(def, "&", unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.LogicalOr:
+                    case Op.LogicalOr:
                         if (isStrict)
                             BinaryOperatorStrict(def, "|", unionBuilder);
                         else
                             BinaryOperator(def, "|", unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.LogicalExclusiveOr:
+                    case Op.LogicalExclusiveOr:
                         if (isStrict)
                             BinaryOperatorStrict(def, "^", unionBuilder);
                         else
                             BinaryOperator(def, "^", unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.LeftShift:
+                    case Op.LeftShift:
                         if (isStrict)
                             BinaryOperatorStrict(def, "<<", unionBuilder);
                         else
                             BinaryOperator(def, "<<", unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.RightShift:
+                    case Op.RightShift:
                         if (isStrict)
                             BinaryOperatorStrict(def, ">>", unionBuilder);
                         else
                             BinaryOperator(def, ">>", unionBuilder);
                         break;
 
-                    case UnionOperatorDefinition.Op.LessAndGreaterThan:
+                    case Op.LessAndGreaterThan:
                         if (isStrict)
                         {
                             BinaryOperatorReturnBoolStrict(def, ">", unionBuilder);
@@ -305,7 +154,7 @@ namespace {def.UnionDefinition.Namespace}
                         }
                         break;
 
-                    case UnionOperatorDefinition.Op.LessAndGreaterThanOrEqual:
+                    case Op.LessAndGreaterThanOrEqual:
                         if (isStrict)
                         {
                             BinaryOperatorReturnBoolStrict(def, ">=", unionBuilder);
@@ -563,7 +412,7 @@ namespace {def.UnionDefinition.Namespace}
         private static void BinaryOperatorStrict(UnionOperatorDefinition def, string op, StringBuilder builder)
         {
             var unionName = def.UnionDefinition.Name;
-            var throwException = def.UnionDefinition.InvalidValueAccess == UnionDefinition.InvalidValueAccessStrategy.ThrowException;
+            var throwException = def.UnionDefinition.InvalidValueAccess == InvalidValueAccess.ThrowException;
             var members = def.UnionDefinition.Members;
             var pre_ = def.UnionDefinition.GetMemberPrefix();
 
@@ -657,7 +506,7 @@ namespace {def.UnionDefinition.Namespace}
         private static void BinaryOperatorReturnBoolStrict(UnionOperatorDefinition def, string op, StringBuilder builder)
         {
             var unionName = def.UnionDefinition.Name;
-            var throwException = def.UnionDefinition.InvalidValueAccess == UnionDefinition.InvalidValueAccessStrategy.ThrowException;
+            var throwException = def.UnionDefinition.InvalidValueAccess == InvalidValueAccess.ThrowException;
             var members = def.UnionDefinition.Members;
             var pre_ = def.UnionDefinition.GetMemberPrefix();
 

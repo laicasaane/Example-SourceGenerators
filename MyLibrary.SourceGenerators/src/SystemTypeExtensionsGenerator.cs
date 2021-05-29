@@ -2,7 +2,7 @@ using Microsoft.CodeAnalysis;
 using System;
 using System.Text;
 
-namespace MySourceGenerators
+namespace MyLibrary
 {
     [Generator]
     public class SystemTypeExtensionsGenerator : ISourceGenerator

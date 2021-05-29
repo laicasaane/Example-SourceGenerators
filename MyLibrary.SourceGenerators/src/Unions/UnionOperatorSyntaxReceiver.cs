@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 
-namespace MySourceGenerators.Unions
+namespace MyLibrary.Unions.SourceGen
 {
     public class UnionOperatorSyntaxReceiver : ISyntaxContextReceiver
     {
@@ -22,119 +22,12 @@ namespace MySourceGenerators.Unions
 
     public class UnionOperatorDefinition
     {
-        public enum Op
-        {
-            /// <summary>
-            /// +x
-            /// </summary>
-            UnaryPlus,
-
-            /// <summary>
-            /// -x
-            /// </summary>
-            UnaryMinus,
-
-            /// <summary>
-            /// !x
-            /// </summary>
-            LogicalNegation,
-
-            /// <summary>
-            /// ~x
-            /// </summary>
-            BitwiseComplement,
-
-            /// <summary>
-            /// ++x
-            /// </summary>
-            Increment,
-
-            /// <summary>
-            /// --x
-            /// </summary>
-            Decrement,
-
-            /// <summary>
-            /// x + y
-            /// </summary>
-            Addition,
-
-            /// <summary>
-            /// x - y
-            /// </summary>
-            Subtraction,
-
-            /// <summary>
-            /// x * y
-            /// </summary>
-            Multiplication,
-
-            /// <summary>
-            /// x / y
-            /// </summary>
-            Division,
-
-            /// <summary>
-            /// x % y
-            /// </summary>
-            Remainder,
-
-            /// <summary>
-            /// x &amp; y
-            /// </summary>
-            LogicalAnd,
-
-            /// <summary>
-            /// x | y
-            /// </summary>
-            LogicalOr,
-
-            /// <summary>
-            /// x ^ y
-            /// </summary>
-            LogicalExclusiveOr,
-
-            /// <summary>
-            /// x &lt;&lt; y
-            /// </summary>
-            LeftShift,
-
-            /// <summary>
-            /// x &gt;&gt; y
-            /// </summary>
-            RightShift,
-
-            /// <summary>
-            /// x &lt; y and x &gt; y
-            /// </summary>
-            LessAndGreaterThan,
-
-            /// <summary>
-            /// x &lt;= y and x &gt;= y
-            /// </summary>
-            LessAndGreaterThanOrEqual,
-        }
-
-        public enum OperandTypeHandlingStrategy
-        {
-            /// <summary>
-            /// Allow implicit casting if operand types are different.
-            /// </summary>
-            Implicit,
-
-            /// <summary>
-            /// <para>Operands must be of the same type. Otherwise use the <see cref="UnionDefinition.InvalidValueAccess"/> argument to decide what should be returned by the operator.</para>
-            /// <para>If no exception is thrown, a default value based on left operand will be returned.</para>
-            /// </summary>
-            Strict
-        }
-
         public readonly struct Operator
         {
             public readonly Op Value;
-            public readonly OperandTypeHandlingStrategy OperandTypeHandling;
+            public readonly OperandTypeHandling OperandTypeHandling;
 
-            public Operator(Op value, OperandTypeHandlingStrategy typeHandling)
+            public Operator(Op value, OperandTypeHandling typeHandling)
             {
                 this.Value = value;
                 this.OperandTypeHandling = typeHandling;
@@ -182,7 +75,7 @@ namespace MySourceGenerators.Unions
 
             foreach (var attribute in attributes)
             {
-                var operandTypeHandling = OperandTypeHandlingStrategy.Implicit;
+                var operandTypeHandling = OperandTypeHandling.Implicit;
 
                 foreach (var arg in attribute.ArgumentList.Arguments)
                 {
@@ -200,9 +93,9 @@ namespace MySourceGenerators.Unions
                             operatorList.Add(value);
                         }
                     }
-                    else if (string.Equals(memberName, "OperandTypeHandling"))
+                    else if (string.Equals(memberName, nameof(OperandTypeHandling)))
                     {
-                        if (Enum.TryParse<OperandTypeHandlingStrategy>(memberAccess.Name.ToString(), true, out var value))
+                        if (Enum.TryParse<OperandTypeHandling>(memberAccess.Name.ToString(), true, out var value))
                         {
                             operandTypeHandling = value;
                         }

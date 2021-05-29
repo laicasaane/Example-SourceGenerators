@@ -8,6 +8,7 @@ namespace MySourceConsumer
     {
         static void Main(string[] args)
         {
+
         }
     }
 }
